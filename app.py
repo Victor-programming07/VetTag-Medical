@@ -115,7 +115,7 @@ def login():
             flash(f"¡Bienvenido/a {user['usuario']}!", "success")
             
             # Carga tu panel HTML real correctamente
-            return render_template('medico.html', usuario=user['usuario'])
+            return render_template('dueno.html', usuario=user['usuario'])
         else:
             flash("Usuario o contraseña incorrectos.", "error")
             return render_template('login.html', modo='login')

@@ -146,13 +146,57 @@ def login():
 # -----------------------------------------------------------------
 # 📌 NUEVA RUTA API: Recibe los datos del ESP32 o de tus pruebas PowerShell
 # -----------------------------------------------------------------
-@app.route('/api/telemetria', methods=['GET'])
-def obtener_telemetria_dueno():
+@app.route('/api/datos', methods=['POST'])
+def recibir_datos():
     try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"status": "error", "message": "JSON vacío"}), 400
+
+        temp = data.get('temperatura')
+        bpm = data.get('ritmo_cardiaco')
+        acc_x = data.get('accel_x')
+        acc_y = data.get('accel_y')
+        acc_z = data.get('accel_z')
+        hall = data.get('efecto_hall')
+        lat = data.get('latitud')
+        lon = data.get('longitud')
+        vel = data.get('velocidad_kmh')
+
         conn = sqlite3.connect('veterinaria.db')
         cursor = conn.cursor()
         
-        # Consultar la última lectura enviada por el ESP32
+        # Crear tabla si no existe
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS telemetria (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                temperatura REAL, ritmo_cardiaco INTEGER,
+                accel_x REAL, accel_y REAL, accel_z REAL,
+                efecto_hall INTEGER, latitud REAL, longitud REAL, velocidad_kmh REAL
+            )
+        ''')
+
+        cursor.execute('''
+            INSERT INTO telemetria (temperatura, ritmo_cardiaco, accel_x, accel_y, accel_z, efecto_hall, latitud, longitud, velocidad_kmh)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (temp, bpm, acc_x, acc_y, acc_z, hall, lat, lon, vel))
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({"status": "success", "message": "Guardado correctamente"}), 201
+
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+# ENDPOINT PARA CONSULTA EN LA APP DEL DUEÑO (GET)
+@app.route('/api/telemetria', methods=['GET'])
+def obtener_telemetria():
+    try:
+        conn = sqlite3.connect('veterinaria.db')
+        cursor = conn.cursor()
         cursor.execute('''
             SELECT temperatura, ritmo_cardiaco, accel_x, accel_y, accel_z, efecto_hall, latitud, longitud, fecha 
             FROM telemetria ORDER BY id DESC LIMIT 1
@@ -162,19 +206,8 @@ def obtener_telemetria_dueno():
 
         if row:
             temp, bpm, ax, ay, az, hall, lat, lon, fecha = row
-            
-            # Formato de actividad según acelerómetro
             mag = (ax**2 + ay**2 + az**2)**0.5
             estado_act = "Reposo" if mag < 1.2 else "Caminando"
-            
-            # Diagnóstico básico para el dueño
-            salud = "Saludable"
-            badge = "bg-success"
-            mensaje = "Tu mascota se encuentra en un rango óptimo."
-            if temp > 39.2 or bpm > 140:
-                salud = "Atención Requerida"
-                badge = "bg-warning"
-                mensaje = "Se detectó una alteración en sus signos vitales."
 
             return jsonify({
                 "temperatura": temp,
@@ -182,26 +215,21 @@ def obtener_telemetria_dueno():
                 "pechera_puesta": bool(hall == 1),
                 "actividad": {"estado": estado_act},
                 "diagnostico": {
-                    "salud_mascota": salud,
-                    "badge_class": badge,
-                    "mensaje": mensaje
+                    "salud_mascota": "Saludable" if temp <= 39.2 else "Alerta",
+                    "badge_class": "bg-success" if temp <= 39.2 else "bg-warning",
+                    "mensaje": "Estado dentro del rango óptimo."
                 },
-                "gps": {
-                    "valido": bool(lat != 0 and lon != 0),
-                    "latitud": lat,
-                    "longitud": lon
-                },
+                "gps": {"valido": bool(lat != 0), "latitud": lat, "longitud": lon},
                 "ultima_actualizacion": str(fecha).split('.')[0] if fecha else "--:--:--"
             })
         else:
             return jsonify({
                 "temperatura": 0, "ritmo_cardiaco": 0, "pechera_puesta": False,
-                "actividad": {"estado": "Sin Conexión"},
-                "diagnostico": {"salud_mascota": "Sin Datos", "badge_class": "bg-secondary", "mensaje": "Esperando señal del collar..."},
+                "actividad": {"estado": "Sin Datos"},
+                "diagnostico": {"salud_mascota": "Sin Datos", "badge_class": "bg-secondary", "mensaje": "Esperando señal..."},
                 "gps": {"valido": False, "latitud": 0, "longitud": 0},
                 "ultima_actualizacion": "--:--:--"
             })
-
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

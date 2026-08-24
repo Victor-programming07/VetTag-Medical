@@ -134,7 +134,7 @@ def login():
             session['usuario_nombre'] = user['usuario']
             flash(f"¡Bienvenido/a {user['usuario']}!", "success")
             
-            return render_template('medico.html', usuario=user['usuario'])
+            return render_template('dueno.html', usuario=user['usuario'])
         else:
             flash("Usuario o contraseña incorrectos.", "error")
             return render_template('login.html', modo='login')

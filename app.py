@@ -134,7 +134,7 @@ def login():
             session['usuario_nombre'] = user['usuario']
             flash(f"¡Bienvenido/a {user['usuario']}!", "success")
             
-            return render_template('dueno.html', usuario=user['usuario'])
+            return render_template('medico.html', usuario=user['usuario'])
         else:
             flash("Usuario o contraseña incorrectos.", "error")
             return render_template('login.html', modo='login')
@@ -146,42 +146,35 @@ def login():
 # -----------------------------------------------------------------
 # 📌 NUEVA RUTA API: Recibe los datos del ESP32 o de tus pruebas PowerShell
 # -----------------------------------------------------------------
-@app.route('/api/ultimos-datos', methods=['GET'])
-def obtener_ultimos_datos():
-    try:
-        conn = obtener_conexion_db()
-        cursor = conn.cursor()
-        
-        # Consultamos el registro más reciente según la ID
-        cursor.execute('''
-            SELECT temperatura, ritmo_cardiaco, accel_x, accel_y, accel_z,
-                   efecto_hall, latitud, longitud, velocidad_kmh, fecha_registro
-            FROM telemetria 
-            ORDER BY id DESC LIMIT 1
-        ''')
-        
-        fila = cursor.fetchone()
-        conn.close()
+@app.route('/api/datos', methods=['POST'])
+def recibir_datos():
+    data = request.get_json()
+    
+    if not data:
+        return jsonify({"status": "error", "message": "Payload JSON vacío"}), 400
 
-        if fila:
-            return jsonify({
-                "status": "success",
-                "temperatura": fila['temperatura'],
-                "ritmo_cardiaco": fila['ritmo_cardiaco'],
-                "accel_x": fila['accel_x'],
-                "accel_y": fila['accel_y'],
-                "accel_z": fila['accel_z'],
-                "efecto_hall": fila['efecto_hall'],
-                "latitud": fila['latitud'],
-                "longitud": fila['longitud'],
-                "velocidad_kmh": fila['velocidad_kmh'],
-                "fecha_registro": fila['fecha_registro']
-            }), 200
-        else:
-            return jsonify({"status": "empty", "mensaje": "Aún no hay lecturas registradas"}), 200
+    # Extracción de los parámetros enviados por el ESP32
+    temp = data.get('temperatura')
+    bpm = data.get('ritmo_cardiaco')
+    acc_x = data.get('accel_x')
+    acc_y = data.get('accel_y')
+    acc_z = data.get('accel_z')
+    hall = data.get('efecto_hall')
+    lat = data.get('latitud')
+    lon = data.get('longitud')
+    vel = data.get('velocidad_kmh')
 
-    except Exception as e:
-        return jsonify({"status": "error", "mensaje": str(e)}), 500
+    # Guardar en SQLite
+    conn = sqlite3.connect('veterinaria.db')
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT INTO telemetria (temperatura, ritmo_cardiaco, accel_x, accel_y, accel_z, efecto_hall, latitud, longitud, velocidad_kmh)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (temp, bpm, acc_x, acc_y, acc_z, hall, lat, lon, vel))
+    conn.commit()
+    conn.close()
+
+    return jsonify({"status": "success", "message": "Datos guardados correctamente"}), 201
 
 @app.route('/logout')
 def logout():

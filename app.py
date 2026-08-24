@@ -1,11 +1,11 @@
 import os
-from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify
 from datetime import datetime
+from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'telemetria_veterinaria_pajan_2026_key')
 
-# VARIABLE EN MEMORIA RAM (Sustituye la Base de Datos)
+# Almacenamiento en RAM de la última lectura del ESP32
 ultima_telemetria = {
     "temperatura": 0,
     "ritmo_cardiaco": 0,
@@ -29,7 +29,6 @@ def login():
         usuario_ingresado = request.form.get('usuario', '').strip()
         password_ingresada = request.form.get('password', '').strip()
 
-        # Validación simple sin BD para prototipo
         if usuario_ingresado and password_ingresada:
             session['usuario_nombre'] = usuario_ingresado
             flash(f"¡Bienvenido/a {usuario_ingresado}!", "success")
@@ -40,9 +39,8 @@ def login():
 
     return render_template('login.html', modo='login')
 
-
 # -----------------------------------------------------------------
-# ENDPOINT POST: Recibe datos del ESP32 y actualiza la RAM
+# ENDPOINT POST: Recibe telemetría desde el ESP32
 # -----------------------------------------------------------------
 @app.route('/api/datos', methods=['POST'])
 def recibir_datos():
@@ -52,7 +50,6 @@ def recibir_datos():
         if not data:
             return jsonify({"status": "error", "message": "JSON vacío"}), 400
 
-        # Guardar directamente en la variable global
         ultima_telemetria = {
             "temperatura": data.get('temperatura', 0),
             "ritmo_cardiaco": data.get('ritmo_cardiaco', 0),
@@ -66,14 +63,13 @@ def recibir_datos():
             "fecha_registro": datetime.now().strftime("%H:%M:%S")
         }
 
-        return jsonify({"status": "success", "message": "Datos recibidos en memoria"}), 201
+        return jsonify({"status": "success", "message": "Guardado en memoria"}), 201
 
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
-
 # -----------------------------------------------------------------
-# ENDPOINT GET: Entrega los datos guardados en RAM al HTML del Dueño
+# ENDPOINT GET: Sirve los datos al HTML de la App del Dueño
 # -----------------------------------------------------------------
 @app.route('/api/telemetria', methods=['GET'])
 def obtener_telemetria():
@@ -89,7 +85,6 @@ def obtener_telemetria():
         lon = ultima_telemetria["longitud"]
         fecha = ultima_telemetria["fecha_registro"]
 
-        # Cálculo de movimiento con acelerómetro
         mag = (ax**2 + ay**2 + az**2)**0.5
         estado_act = "Reposo" if mag < 1.2 else "Caminando"
 
@@ -110,15 +105,10 @@ def obtener_telemetria():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
 @app.route('/logout')
 def logout():
     session.clear()
     flash("Has cerrado sesión.", "info")
-    return redirect(url_for('login'))
-
-if __name__ == '__main__':
-    app.run(debug=True, port=5000)
     return redirect(url_for('login'))
 
 if __name__ == '__main__':

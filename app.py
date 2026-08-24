@@ -148,33 +148,57 @@ def login():
 # -----------------------------------------------------------------
 @app.route('/api/datos', methods=['POST'])
 def recibir_datos():
-    data = request.get_json()
-    
-    if not data:
-        return jsonify({"status": "error", "message": "Payload JSON vacío"}), 400
+    try:
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({"status": "error", "message": "Payload JSON vacío"}), 400
 
-    # Extracción de los parámetros enviados por el ESP32
-    temp = data.get('temperatura')
-    bpm = data.get('ritmo_cardiaco')
-    acc_x = data.get('accel_x')
-    acc_y = data.get('accel_y')
-    acc_z = data.get('accel_z')
-    hall = data.get('efecto_hall')
-    lat = data.get('latitud')
-    lon = data.get('longitud')
-    vel = data.get('velocidad_kmh')
+        # Extracción de parámetros
+        temp = data.get('temperatura')
+        bpm = data.get('ritmo_cardiaco')
+        acc_x = data.get('accel_x')
+        acc_y = data.get('accel_y')
+        acc_z = data.get('accel_z')
+        hall = data.get('efecto_hall')
+        lat = data.get('latitud')
+        lon = data.get('longitud')
+        vel = data.get('velocidad_kmh')
 
-    # Guardar en SQLite
-    conn = sqlite3.connect('veterinaria.db')
-    cursor = conn.cursor()
-    cursor.execute('''
-        INSERT INTO telemetria (temperatura, ritmo_cardiaco, accel_x, accel_y, accel_z, efecto_hall, latitud, longitud, velocidad_kmh)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ''', (temp, bpm, acc_x, acc_y, acc_z, hall, lat, lon, vel))
-    conn.commit()
-    conn.close()
+        conn = sqlite3.connect('veterinaria.db')
+        cursor = conn.cursor()
 
-    return jsonify({"status": "success", "message": "Datos guardados correctamente"}), 201
+        # 1. Asegurar que la tabla exista con todas las columnas
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS telemetria (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                temperatura REAL,
+                ritmo_cardiaco INTEGER,
+                accel_x REAL,
+                accel_y REAL,
+                accel_z REAL,
+                efecto_hall INTEGER,
+                latitud REAL,
+                longitud REAL,
+                velocidad_kmh REAL
+            )
+        ''')
+
+        # 2. Inserción de datos
+        cursor.execute('''
+            INSERT INTO telemetria (temperatura, ritmo_cardiaco, accel_x, accel_y, accel_z, efecto_hall, latitud, longitud, velocidad_kmh)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (temp, bpm, acc_x, acc_y, acc_z, hall, lat, lon, vel))
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({"status": "success", "message": "Datos guardados correctamente"}), 201
+
+    except Exception as e:
+        print(f"❌ Error en servidor: {str(e)}")
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route('/logout')
 def logout():

@@ -5,7 +5,7 @@ from flask import Flask, render_template, request, redirect, url_for, flash, ses
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'telemetria_veterinaria_pajan_2026_key')
 
-# Almacenamiento en RAM de la última lectura del ESP32
+# Almacenamiento en RAM de la lectura que mandes por PowerShell/ESP32
 ultima_telemetria = {
     "temperatura": 0,
     "ritmo_cardiaco": 0,
@@ -39,8 +39,9 @@ def login():
 
     return render_template('login.html', modo='login')
 
+
 # -----------------------------------------------------------------
-# ENDPOINT POST: Recibe telemetría desde el ESP32
+# 1. RECIBE EL JSON DESDE POWERSHELL O ESP32 (POST)
 # -----------------------------------------------------------------
 @app.route('/api/datos', methods=['POST'])
 def recibir_datos():
@@ -50,6 +51,7 @@ def recibir_datos():
         if not data:
             return jsonify({"status": "error", "message": "JSON vacío"}), 400
 
+        # Guardar la telemetría enviada desde PowerShell
         ultima_telemetria = {
             "temperatura": data.get('temperatura', 0),
             "ritmo_cardiaco": data.get('ritmo_cardiaco', 0),
@@ -63,13 +65,14 @@ def recibir_datos():
             "fecha_registro": datetime.now().strftime("%H:%M:%S")
         }
 
-        return jsonify({"status": "success", "message": "Guardado en memoria"}), 201
+        return jsonify({"status": "success", "message": "Datos actualizados en RAM"}), 201
 
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
+
 # -----------------------------------------------------------------
-# ENDPOINT GET: Sirve los datos al HTML de la App del Dueño
+# 2. SIRVE LOS DATOS A LA INTERFAZ DEL DUEÑO (GET)
 # -----------------------------------------------------------------
 @app.route('/api/telemetria', methods=['GET'])
 def obtener_telemetria():
@@ -85,6 +88,7 @@ def obtener_telemetria():
         lon = ultima_telemetria["longitud"]
         fecha = ultima_telemetria["fecha_registro"]
 
+        # Determinar movimiento mediante acelerómetro
         mag = (ax**2 + ay**2 + az**2)**0.5
         estado_act = "Reposo" if mag < 1.2 else "Caminando"
 
@@ -104,6 +108,7 @@ def obtener_telemetria():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 @app.route('/logout')
 def logout():

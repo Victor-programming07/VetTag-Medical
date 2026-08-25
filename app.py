@@ -1,7 +1,8 @@
+import os
 import datetime
-import random
-from flask import Flask, render_template, request, jsonify, redirect, url_for, session
-
+from datetime import timezone, timedelta
+from functools import wraps  # <--- Esta línea es la que debe estar arriba
+from flask import Flask, render_template, request, jsonify, redirect, url_for, session, flash
 app = Flask(__name__)
 app.secret_key = "vettag_telemetry_secure_key"
 

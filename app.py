@@ -166,7 +166,6 @@ def guardar_dosis():
     PROXIMO_ID_DOSIS += 1
     return jsonify({"status": "success", "id": nuevo_registro["id"]}), 201
 
-@app.raise_compat = lambda *argv: None # Soporte interno
 
 @app.route('/api/historial_dosis', methods=['GET'])
 def obtener_historial_dosis():

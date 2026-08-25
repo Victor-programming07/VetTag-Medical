@@ -1,5 +1,4 @@
 import os
-import random
 import datetime
 from datetime import timezone, timedelta
 from functools import wraps
@@ -12,15 +11,17 @@ app.secret_key = "vettag_telemetry_secure_key"
 HISTORIAL_DOSIS = []
 PROXIMO_ID_DOSIS = 1
 
-def evaluar_estado_clinico(temp, bpm, arnes_puesto):
+# Estado global para recibir los datos físicos del ESP32 paso a paso
+ESTADO_HARDWARE = {
+    "conectado": False,
+    "temperatura": 0.0,
+    "ritmo_cardiaco": 0,
+    "actividad": {"estado": "En espera de sensor", "icono": "⏳"},
+    "ultima_actualizacion": "---"
+}
+
+def evaluar_estado_clinico(temp, bpm):
     """Calcula el diagnóstico por IA según los rangos vitales del paciente."""
-    if not arnes_puesto:
-        return {
-            "salud_mascota": "Arnés Desconectado",
-            "badge_class": "bg-danger",
-            "mensaje": "El arnés capacitivo no detecta contacto. Verifique la sujeción del dispositivo."
-        }
-    
     if temp > 39.2 and bpm > 140:
         return {
             "salud_mascota": "Estado Crítico",
@@ -33,7 +34,7 @@ def evaluar_estado_clinico(temp, bpm, arnes_puesto):
             "badge_class": "bg-warning text-dark",
             "mensaje": "Temperatura corporal elevada por encima del rango normal (37.5°C - 39.2°C)."
         }
-    elif temp < 37.5:
+    elif temp < 37.5 and temp > 0:
         return {
             "salud_mascota": "Hipotermia Detectada",
             "badge_class": "bg-warning text-dark",
@@ -45,11 +46,17 @@ def evaluar_estado_clinico(temp, bpm, arnes_puesto):
             "badge_class": "bg-warning text-dark",
             "mensaje": "Frecuencia cardíaca acelerada por encima de los valores basales en reposo."
         }
-    elif bpm < 60:
+    elif bpm < 60 and bpm > 0:
         return {
             "salud_mascota": "Bradicardia",
             "badge_class": "bg-warning text-dark",
             "mensaje": "Frecuencia cardíaca anormalmente baja. Se sugiere monitoreo de pulso."
+        }
+    elif temp == 0:
+        return {
+            "salud_mascota": "Sin Conexión de Sensor",
+            "badge_class": "bg-secondary",
+            "mensaje": "A la espera de datos del sensor MLX90614 en el ESP32."
         }
     else:
         return {
@@ -59,7 +66,6 @@ def evaluar_estado_clinico(temp, bpm, arnes_puesto):
         }
 
 def login_required(f):
-    """Protege las rutas que requieren sesión activa."""
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if not session.get('usuario_autenticado'):
@@ -67,71 +73,110 @@ def login_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
-# ==========================================
-# RUTAS DE NAVEGACIÓN (VISTAS HTML)
-# ==========================================
-@app.route('/cambiar_credenciales', methods=['GET', 'POST'])
-@login_required
-def cambiar_credenciales():
-    """Ruta para actualizar las credenciales del sistema."""
-    if request.method == 'POST':
-        # Lógica para guardar la nueva contraseña
-        flash("Contraseña actualizada exitosamente.", "success")
-        return redirect(url_for('panel_dueno'))
-    return render_template('cambiar_credenciales.html')
-    
 @app.route('/')
 def index():
     return redirect(url_for('login'))
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    """Gestiona el inicio de sesión para desbloquear los paneles."""
     if request.method == 'POST':
-        # Aquí puedes validar tu contraseña o credenciales personalizadas
-        # Por ahora, activamos la sesión de manera segura al enviar el formulario:
         session['usuario_autenticado'] = True
-        return redirect(url_for('panel_dueno')) # O la vista que prefieras por defecto
-        
+        return redirect(url_for('panel_dueno'))
     return render_template('login.html')
 
 @app.route('/dueno')
 @login_required
 def panel_dueno():
-    """Ruta protegida para la interfaz del dueño."""
     return render_template('dueno.html')
 
 @app.route('/medico')
 @login_required
 def panel_medico():
-    """Ruta protegida para la interfaz del médico."""
     return render_template('medico.html')
 
-# ==========================================
-# ENDPOINTS DE TELEMETRÍA Y DATOS (API)
-# ==========================================
+@app.route('/cambiar_credenciales', methods=['GET', 'POST'])
+@login_required
+def cambiar_credenciales():
+    if request.method == 'POST':
+        flash("Credenciales actualizadas correctamente.", "success")
+        return redirect(url_for('panel_medico'))
+    return render_template('cambiar_credenciales.html')
+
+@app.route('/api/recibir_esp32', methods=['POST'])
+def recibir_esp32():
+    """Endpoint único para recibir los datos del ESP32 conforme los vayas conectando."""
+    global ESTADO_HARDWARE
+    data = request.get_json() or {}
+    
+    ESTADO_HARDWARE["conectado"] = True
+    
+    if "temperatura" in data:
+        ESTADO_HARDWARE["temperatura"] = float(data["temperatura"])
+    if "ritmo_cardiaco" in data:
+        ESTADO_HARDWARE["ritmo_cardiaco"] = int(data["ritmo_cardiaco"])
+    if "actividad" in data:
+        ESTADO_HARDWARE["actividad"] = data["actividad"]
+        
+    ESTADO_HARDWARE["ultima_actualizacion"] = datetime.datetime.now().strftime("%H:%M:%S")
+    return jsonify({"status": "success", "mensaje": "Temperatura recibida con éxito"}), 200
 
 @app.route('/api/telemetria', methods=['GET'])
 def api_telemetria():
-    """Devuelve valores en cero a la espera de la integración física con el ESP32."""
+    """Devuelve a los paneles web los datos reales leídos por el ESP32."""
+    global ESTADO_HARDWARE
+    temp = ESTADO_HARDWARE["temperatura"]
+    bpm = ESTADO_HARDWARE["ritmo_cardiaco"]
+    
+    diag = evaluar_estado_clinico(temp, bpm)
+    
     return jsonify({
-        "conectado": False,
-        "temperatura": 0.0,
-        "ritmo_cardiaco": 0,
-        "pechera_puesta": False,
-        "actividad": {"estado": "En Espera", "icono": "⚪"},
-        "ultima_actualizacion": "---",
-        "diagnostico": {
-            "salud_mascota": "Sin Dispositivo",
-            "badge_class": "bg-secondary",
-            "mensaje": "A la espera de la conexión con el microcontrolador ESP32."
-        },
-        "gps": {
-            "valido": False,
-            "latitud": -1.3458,
-            "longitud": -80.4285
-        }
+        "conectado": ESTADO_HARDWARE["conectado"],
+        "temperatura": temp,
+        "ritmo_cardiaco": bpm,
+        "actividad": ESTADO_HARDWARE["actividad"],
+        "ultima_actualizacion": ESTADO_HARDWARE["ultima_actualizacion"],
+        "diagnostico": diag
     })
+
+@app.route('/api/guardar_dosis', methods=['POST'])
+def guardar_dosis():
+    global PROXIMO_ID_DOSIS
+    data = request.get_json() or {}
+    peso = float(data.get('peso', 0.0))
+    dosis_mg_kg = float(data.get('dosis_mg_kg', 0.0))
+    concentracion = float(data.get('concentracion', 1.0))
+    volumen_ml = round((peso * dosis_mg_kg) / concentracion, 2) if concentracion > 0 else 0.0
+
+    nuevo_registro = {
+        "id": PROXIMO_ID_DOSIS,
+        "fecha": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
+        "paciente": data.get('paciente', 'Desconocido'),
+        "peso": peso,
+        "propietario": data.get('propietario', 'N/A'),
+        "telefono": data.get('telefono', 'N/A'),
+        "correo": data.get('correo', 'N/A'),
+        "direccion": data.get('direccion', 'N/A'),
+        "farmaco": data.get('farmaco', 'N/A'),
+        "dosis_mg_kg": dosis_mg_kg,
+        "concentracion": concentracion,
+        "volumen_ml": volumen_ml,
+        "sugerencias": data.get('sugerencias', 'Sin observaciones.')
+    }
+    HISTORIAL_DOSIS.append(nuevo_registro)
+    PROXIMO_ID_DOSIS += 1
+    return jsonify({"status": "success", "id": nuevo_registro["id"]}), 201
+
+@app.raise_compat = lambda *argv: None # Soporte interno
+
+@app.route('/api/historial_dosis', methods=['GET'])
+def obtener_historial_dosis():
+    return jsonify(HISTORIAL_DOSIS)
+
+@app.route('/api/eliminar_dosis/<int:id_dosis>', methods=['DELETE'])
+def eliminar_dosis(id_dosis):
+    global HISTORIAL_DOSIS
+    HISTORIAL_DOSIS = [item for item in HISTORIAL_DOSIS if item['id'] != id_dosis]
+    return jsonify({"status": "success", "deleted_id": id_dosis})
 
 @app.route('/logout')
 def logout():

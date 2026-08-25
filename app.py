@@ -21,7 +21,6 @@ def evaluar_estado_clinico(temp, bpm, arnes_puesto):
             "mensaje": "El arnés capacitivo no detecta contacto. Verifique la sujeción del dispositivo."
         }
     
-    # Análisis de constante vital de temperatura y ritmo cardíaco
     if temp > 39.2 and bpm > 140:
         return {
             "salud_mascota": "Estado Crítico",
@@ -68,27 +67,58 @@ def login_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
+# ==========================================
+# RUTAS DE NAVEGACIÓN (VISTAS HTML)
+# ==========================================
+
+@app.route('/')
+def index():
+    return redirect(url_for('login'))
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    # Si ya tienes tu propia lógica de autenticación POST, respétala. 
+    # Esta ruta evita que el redirect de login falle con 404.
+    return render_template('login.html')
+
 @app.route('/dueno')
 @login_required
 def panel_dueno():
     """Ruta protegida para la interfaz del dueño."""
     return render_template('dueno.html')
-    
+
+@app.route('/medico')
+@login_required
+def panel_medico():
+    """Ruta protegida para la interfaz del médico."""
+    return render_template('medico.html')
+
+# ==========================================
+# ENDPOINTS DE TELEMETRÍA Y DATOS (API)
+# ==========================================
+
 @app.route('/api/telemetria', methods=['GET'])
 def api_telemetria():
-    """Genera/Lee los datos telemétricos en tiempo real para el visor."""
+    """Genera los datos telemétricos consumidos por dueno.html y medico.html"""
     temp = round(random.uniform(37.0, 39.8), 1)
     bpm = random.randint(70, 150)
     pechera = random.choice([True, True, True, False])
-    actividades = ["Reposo", "Caminando", "Corriendo", "Agitado"]
+    actividades = [
+        {"estado": "Reposo", "icono": "🛌"},
+        {"estado": "Caminando", "icono": "🚶"},
+        {"estado": "Corriendo", "icono": "🏃"},
+        {"estado": "Agitado", "icono": "⚠️"}
+    ]
+    actividad_actual = random.choice(actividades)
     
     diag = evaluar_estado_clinico(temp, bpm, pechera)
     
     return jsonify({
+        "conectado": True,
         "temperatura": temp,
         "ritmo_cardiaco": bpm,
         "pechera_puesta": pechera,
-        "actividad": {"estado": random.choice(actividades)},
+        "actividad": actividad_actual,
         "ultima_actualizacion": datetime.datetime.now().strftime("%H:%M:%S"),
         "diagnostico": diag,
         "gps": {
@@ -97,48 +127,6 @@ def api_telemetria():
             "longitud": -80.4285 + random.uniform(-0.001, 0.001)
         }
     })
-
-@app.route('/api/guardar_dosis', methods=['POST'])
-def guardar_dosis():
-    global PROXIMO_ID_DOSIS
-    data = request.get_json() or {}
-    
-    peso = float(data.get('peso', 0.0))
-    dosis_mg_kg = float(data.get('dosis_mg_kg', 0.0))
-    concentracion = float(data.get('concentracion', 1.0))
-    
-    volumen_ml = round((peso * dosis_mg_kg) / concentracion, 2) if concentracion > 0 else 0.0
-
-    nuevo_registro = {
-        "id": PROXIMO_ID_DOSIS,
-        "fecha": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
-        "paciente": data.get('paciente', 'Desconocido'),
-        "peso": peso,
-        "propietario": data.get('propietario', 'N/A'),
-        "telefono": data.get('telefono', 'N/A'),
-        "correo": data.get('correo', 'N/A'),
-        "direccion": data.get('direccion', 'N/A'),
-        "farmaco": data.get('farmaco', 'N/A'),
-        "dosis_mg_kg": dosis_mg_kg,
-        "concentracion": concentracion,
-        "volumen_ml": volumen_ml,
-        "sugerencias": data.get('sugerencias', 'Sin observaciones.')
-    }
-    
-    HISTORIAL_DOSIS.append(nuevo_registro)
-    PROXIMO_ID_DOSIS += 1
-    
-    return jsonify({"status": "success", "id": nuevo_registro["id"]}), 201
-
-@app.route('/api/historial_dosis', methods=['GET'])
-def obtener_historial_dosis():
-    return jsonify(HISTORIAL_DOSIS)
-
-@app.route('/api/eliminar_dosis/<int:id_dosis>', methods=['DELETE'])
-def eliminar_dosis(id_dosis):
-    global HISTORIAL_DOSIS
-    HISTORIAL_DOSIS = [item for item in HISTORIAL_DOSIS if item['id'] != id_dosis]
-    return jsonify({"status": "success", "deleted_id": id_dosis})
 
 @app.route('/logout')
 def logout():

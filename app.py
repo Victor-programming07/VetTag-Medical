@@ -1,8 +1,10 @@
 import os
+import random
 import datetime
 from datetime import timezone, timedelta
-from functools import wraps  # <--- Esta línea es la que debe estar arriba
+from functools import wraps
 from flask import Flask, render_template, request, jsonify, redirect, url_for, session, flash
+
 app = Flask(__name__)
 app.secret_key = "vettag_telemetry_secure_key"
 
@@ -44,7 +46,7 @@ def evaluar_estado_clinico(temp, bpm, arnes_puesto):
             "badge_class": "bg-warning text-dark",
             "mensaje": "Frecuencia cardíaca acelerada por encima de los valores basales en reposo."
         }
-    elif bpm < 60:  # CORREGIDO: Usar 60 en lugar de ceros a la izquierda como 060
+    elif bpm < 60:
         return {
             "salud_mascota": "Bradicardia",
             "badge_class": "bg-warning text-dark",
@@ -74,7 +76,7 @@ def panel_dueno():
     
 @app.route('/api/telemetria', methods=['GET'])
 def api_telemetria():
-    """Genera/Lee los datos telemétricos en tiempo real para el visor del médico."""
+    """Genera/Lee los datos telemétricos en tiempo real para el visor."""
     temp = round(random.uniform(37.0, 39.8), 1)
     bpm = random.randint(70, 150)
     pechera = random.choice([True, True, True, False])
@@ -98,7 +100,6 @@ def api_telemetria():
 
 @app.route('/api/guardar_dosis', methods=['POST'])
 def guardar_dosis():
-    """Recibe los datos del modal de cálculo e inserta la receta en la BD."""
     global PROXIMO_ID_DOSIS
     data = request.get_json() or {}
     
@@ -131,12 +132,10 @@ def guardar_dosis():
 
 @app.route('/api/historial_dosis', methods=['GET'])
 def obtener_historial_dosis():
-    """Devuelve las prescripciones almacenadas para la tabla en el modal."""
     return jsonify(HISTORIAL_DOSIS)
 
 @app.route('/api/eliminar_dosis/<int:id_dosis>', methods=['DELETE'])
 def eliminar_dosis(id_dosis):
-    """Elimina una fila específica de la base de datos por ID."""
     global HISTORIAL_DOSIS
     HISTORIAL_DOSIS = [item for item in HISTORIAL_DOSIS if item['id'] != id_dosis]
     return jsonify({"status": "success", "deleted_id": id_dosis})
@@ -144,7 +143,7 @@ def eliminar_dosis(id_dosis):
 @app.route('/logout')
 def logout():
     session.clear()
-    return redirect(url_for('panel_medico'))
+    return redirect(url_for('login'))
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)

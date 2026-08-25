@@ -5,19 +5,8 @@ from flask import Flask, render_template, request, redirect, url_for, flash, ses
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'telemetria_veterinaria_pajan_2026_key')
 
-# Almacenamiento en RAM de la lectura que mandes por PowerShell/ESP32
-ultima_telemetria = {
-    "temperatura": 0,
-    "ritmo_cardiaco": 0,
-    "accel_x": 0.0,
-    "accel_y": 0.0,
-    "accel_z": 0.0,
-    "efecto_hall": 0,
-    "latitud": 0.0,
-    "longitud": 0.0,
-    "velocidad_kmh": 0.0,
-    "fecha_registro": "--:--:--"
-}
+# Objeto en memoria RAM iniciado completamente sin datos (representado por None)
+ultima_telemetria = None
 
 @app.route('/')
 def inicio():
@@ -41,7 +30,7 @@ def login():
 
 
 # -----------------------------------------------------------------
-# 1. RECIBE EL JSON DESDE POWERSHELL O ESP32 (POST)
+# 1. RECEPCIÓNN DE DATOS (POST) - PowerShell / ESP32
 # -----------------------------------------------------------------
 @app.route('/api/datos', methods=['POST'])
 def recibir_datos():
@@ -51,10 +40,10 @@ def recibir_datos():
         if not data:
             return jsonify({"status": "error", "message": "JSON vacío"}), 400
 
-        # Guardar la telemetría enviada desde PowerShell
+        # Guardar en RAM los datos exactos recibidos en el payload
         ultima_telemetria = {
-            "temperatura": data.get('temperatura', 0),
-            "ritmo_cardiaco": data.get('ritmo_cardiaco', 0),
+            "temperatura": data.get('temperatura'),
+            "ritmo_cardiaco": data.get('ritmo_cardiaco'),
             "accel_x": data.get('accel_x', 0.0),
             "accel_y": data.get('accel_y', 0.0),
             "accel_z": data.get('accel_z', 0.0),
@@ -65,19 +54,36 @@ def recibir_datos():
             "fecha_registro": datetime.now().strftime("%H:%M:%S")
         }
 
-        return jsonify({"status": "success", "message": "Datos actualizados en RAM"}), 201
+        return jsonify({"status": "success", "message": "Datos recibidos correctamente"}), 201
 
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
 # -----------------------------------------------------------------
-# 2. SIRVE LOS DATOS A LA INTERFAZ DEL DUEÑO (GET)
+# 2. CONSULTA DEL FRONTEND (GET) - Aplicación del Dueño
 # -----------------------------------------------------------------
 @app.route('/api/telemetria', methods=['GET'])
 def obtener_telemetria():
     global ultima_telemetria
     try:
+        # Si NO hemos inyectado datos aún desde PowerShell, responde vacío con "--"
+        if ultima_telemetria is None:
+            return jsonify({
+                "temperatura": "--",
+                "ritmo_cardiaco": "--",
+                "pechera_puesta": False,
+                "actividad": {"estado": "--"},
+                "diagnostico": {
+                    "salud_mascota": "--",
+                    "badge_class": "bg-secondary",
+                    "mensaje": "Esperando ingreso de datos..."
+                },
+                "gps": {"valido": False, "latitud": 0.0, "longitud": 0.0},
+                "ultima_actualizacion": "--:--:--"
+            })
+
+        # Si YA inyectaste datos por PowerShell, procesa y responde con esos datos exactos
         temp = ultima_telemetria["temperatura"]
         bpm = ultima_telemetria["ritmo_cardiaco"]
         ax = ultima_telemetria["accel_x"]
@@ -88,9 +94,19 @@ def obtener_telemetria():
         lon = ultima_telemetria["longitud"]
         fecha = ultima_telemetria["fecha_registro"]
 
-        # Determinar movimiento mediante acelerómetro
+        # Determinar estado de movimiento según acelerómetro recibido
         mag = (ax**2 + ay**2 + az**2)**0.5
-        estado_act = "Reposo" if mag < 1.2 else "Caminando"
+        estado_act = "En Reposo" if mag < 1.2 else "En Movimiento"
+
+        # Evaluar estado según parámetros recibidos
+        if temp is not None and temp > 39.2:
+            salud = "Alerta Médica"
+            badge = "bg-danger"
+            mensaje = "Temperatura elevada detectada."
+        else:
+            salud = "Estable"
+            badge = "bg-success"
+            mensaje = "Signos dentro del rango normal."
 
         return jsonify({
             "temperatura": temp,
@@ -98,11 +114,11 @@ def obtener_telemetria():
             "pechera_puesta": bool(hall == 1),
             "actividad": {"estado": estado_act},
             "diagnostico": {
-                "salud_mascota": "Saludable" if temp <= 39.2 else "Alerta",
-                "badge_class": "bg-success" if temp <= 39.2 else "bg-warning",
-                "mensaje": "Estado dentro del rango óptimo."
+                "salud_mascota": salud,
+                "badge_class": badge,
+                "mensaje": mensaje
             },
-            "gps": {"valido": bool(lat != 0), "latitud": lat, "longitud": lon},
+            "gps": {"valido": bool(lat != 0 and lon != 0), "latitud": lat, "longitud": lon},
             "ultima_actualizacion": fecha
         })
 

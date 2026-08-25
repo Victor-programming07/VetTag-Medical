@@ -1,166 +1,138 @@
-import os
-from datetime import datetime
-from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify
+import datetime
+import random
+from flask import Flask, render_template, request, jsonify, redirect, url_for, session
 
 app = Flask(__name__)
-app.secret_key = os.environ.get('SECRET_KEY', 'telemetria_veterinaria_pajan_2026_key')
+app.secret_key = "vettag_telemetry_secure_key"
 
-# Almacenamiento volátil en memoria RAM
-ultima_telemetria = None
-ultima_fecha_recepcion = None
+# Base de datos en memoria para el historial de prescripciones
+HISTORIAL_DOSIS = []
+PROXIMO_ID_DOSIS = 1
 
-# Tiempo límite sin recibir datos antes de reiniciar la RAM (en segundos)
-TIMEOUT_DESCONEXION = 8
-
-@app.route('/')
-def inicio():
-    return redirect(url_for('login'))
-
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    if request.method == 'POST':
-        usuario_ingresado = request.form.get('usuario', '').strip()
-        password_ingresada = request.form.get('password', '').strip()
-        rol = request.form.get('rol', 'dueno').strip()
-
-        if usuario_ingresado and password_ingresada:
-            session['usuario_nombre'] = usuario_ingresado
-            session['rol'] = rol
-            flash(f"¡Bienvenido/a {usuario_ingresado}!", "success")
-            
-            if rol == 'medico':
-                return redirect(url_for('vista_medico'))
-            return redirect(url_for('vista_dueno'))
-        else:
-            flash("Por favor ingrese usuario y contraseña.", "error")
-            return render_template('login.html', modo='login')
-
-    return render_template('login.html', modo='login')
-
-@app.route('/dueno')
-def vista_dueno():
-    if 'usuario_nombre' not in session:
-        return redirect(url_for('login'))
-    return render_template('dueno.html', usuario=session['usuario_nombre'])
-
-@app.route('/medico')
-def vista_medico():
-    if 'usuario_nombre' not in session:
-        return redirect(url_for('login'))
-    return render_template('medico.html', usuario=session['usuario_nombre'])
-
-
-# -----------------------------------------------------------------
-# 1. RECEPCIÓN DE DATOS DESDE ESP32 (POST)
-# -----------------------------------------------------------------
-@app.route('/api/datos', methods=['POST'])
-def recibir_datos():
-    global ultima_telemetria, ultima_fecha_recepcion
-    try:
-        data = request.get_json()
-        if not data:
-            return jsonify({"status": "error", "message": "JSON vacío"}), 400
-
-        # Guardar en RAM los datos y actualizar marca de tiempo de recepción
-        ultima_fecha_recepcion = datetime.now()
-        ultima_telemetria = {
-            "temperatura": data.get('temperatura', 0.0),
-            "ritmo_cardiaco": data.get('ritmo_cardiaco', 0),
-            "accel_x": data.get('accel_x', 0.0),
-            "accel_y": data.get('accel_y', 0.0),
-            "accel_z": data.get('accel_z', 0.0),
-            "efecto_hall": data.get('efecto_hall', 0),
-            "latitud": data.get('latitud', 0.0),
-            "longitud": data.get('longitud', 0.0),
-            "velocidad_kmh": data.get('velocidad_kmh', 0.0),
-            "fecha_registro": ultima_fecha_recepcion.strftime("%H:%M:%S")
+def evaluar_estado_clinico(temp, bpm, arnes_puesto):
+    """Calcula el diagnóstico por IA según los rangos vitales del paciente."""
+    if not arnes_puesto:
+        return {
+            "salud_mascota": "Arnés Desconectado",
+            "badge_class": "bg-danger",
+            "mensaje": "El arnés capacitivo no detecta contacto. Verifique la sujeción del dispositivo."
+        }
+    
+    # Análisis de constante vital de temperatura y ritmo cardíaco
+    if temp > 39.2 and bpm > 140:
+        return {
+            "salud_mascota": "Estado Crítico",
+            "badge_class": "bg-danger",
+            "mensaje": "Alerta de Hipertermia severa y Taquicardia. Requiere intervención médica inmediata."
+        }
+    elif temp > 39.2:
+        return {
+            "salud_mascota": "Fiebre Detectada",
+            "badge_class": "bg-warning text-dark",
+            "mensaje": "Temperatura corporal elevada por encima del rango normal (37.5°C - 39.2°C)."
+        }
+    elif temp < 37.5:
+        return {
+            "salud_mascota": "Hipotermia Detectada",
+            "badge_class": "bg-warning text-dark",
+            "mensaje": "Temperatura corporal por debajo del límite seguro. Mantener abrigado."
+        }
+    elif bpm > 140:
+        return {
+            "salud_mascota": "Taquicardia",
+            "badge_class": "bg-warning text-dark",
+            "mensaje": "Frecuencia cardíaca acelerada por encima de los valores basales en reposo."
+        }
+    elif bpm < 60:  # CORREGIDO: Usar 60 en lugar de ceros a la izquierda como 060
+        return {
+            "salud_mascota": "Bradicardia",
+            "badge_class": "bg-warning text-dark",
+            "mensaje": "Frecuencia cardíaca anormalmente baja. Se sugiere monitoreo de pulso."
+        }
+    else:
+        return {
+            "salud_mascota": "Estado Normal",
+            "badge_class": "bg-success",
+            "mensaje": "Constantes vitales dentro de rangos fisiológicos estables."
         }
 
-        return jsonify({"status": "success", "message": "Datos recibidos correctamente"}), 201
+@app.route('/medico')
+def panel_medico():
+    return render_template('medico.html')
 
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-
-# -----------------------------------------------------------------
-# 2. CONSULTA DEL FRONTEND (GET) - AUTO-REINICIO DE VALORES A ZERO
-# -----------------------------------------------------------------
 @app.route('/api/telemetria', methods=['GET'])
-def obtener_telemetria():
-    global ultima_telemetria, ultima_fecha_recepcion
-    try:
-        # Evaluar si ha transcurrido más tiempo del permitido sin recibir nada del ESP32
-        if ultima_fecha_recepcion is not None:
-            segundos_sin_datos = (datetime.now() - ultima_fecha_recepcion).total_seconds()
-            if segundos_sin_datos > TIMEOUT_DESCONEXION:
-                # REINICIO AUTOMÁTICO DE MEMORIA
-                ultima_telemetria = None
-                ultima_fecha_recepcion = None
+def api_telemetria():
+    """Genera/Lee los datos telemétricos en tiempo real para el visor del médico."""
+    temp = round(random.uniform(37.0, 39.8), 1)
+    bpm = random.randint(70, 150)
+    pechera = random.choice([True, True, True, False])
+    actividades = ["Reposo", "Caminando", "Corriendo", "Agitado"]
+    
+    diag = evaluar_estado_clinico(temp, bpm, pechera)
+    
+    return jsonify({
+        "temperatura": temp,
+        "ritmo_cardiaco": bpm,
+        "pechera_puesta": pechera,
+        "actividad": {"estado": random.choice(actividades)},
+        "ultima_actualizacion": datetime.datetime.now().strftime("%H:%M:%S"),
+        "diagnostico": diag,
+        "gps": {
+            "valido": True,
+            "latitud": -1.3458 + random.uniform(-0.001, 0.001),
+            "longitud": -80.4285 + random.uniform(-0.001, 0.001)
+        }
+    })
 
-        # Si la RAM está vacía / reiniciada, responder a cero/vacío
-        if ultima_telemetria is None:
-            return jsonify({
-                "conectado": False,
-                "temperatura": 0,
-                "ritmo_cardiaco": 0,
-                "pechera_puesta": False,
-                "actividad": {"estado": "Sin Conexión"},
-                "diagnostico": {
-                    "salud_mascota": "Desconectado",
-                    "badge_class": "bg-secondary",
-                    "mensaje": "Dispositivo fuera de línea. Esperando sensores..."
-                },
-                "gps": {"valido": False, "latitud": 0.0, "longitud": 0.0},
-                "ultima_actualizacion": "--:--:--"
-            })
+@app.route('/api/guardar_dosis', methods=['POST'])
+def guardar_dosis():
+    """Recibe los datos del modal de cálculo e inserta la receta en la BD."""
+    global PROXIMO_ID_DOSIS
+    data = request.get_json() or {}
+    
+    peso = float(data.get('peso', 0.0))
+    dosis_mg_kg = float(data.get('dosis_mg_kg', 0.0))
+    concentracion = float(data.get('concentracion', 1.0))
+    
+    volumen_ml = round((peso * dosis_mg_kg) / concentracion, 2) if concentracion > 0 else 0.0
 
-        # Si el dispositivo está enviando activamente:
-        temp = ultima_telemetria["temperatura"]
-        bpm = ultima_telemetria["ritmo_cardiaco"]
-        ax = ultima_telemetria["accel_x"]
-        ay = ultima_telemetria["accel_y"]
-        az = ultima_telemetria["accel_z"]
-        hall = ultima_telemetria["efecto_hall"]
-        lat = ultima_telemetria["latitud"]
-        lon = ultima_telemetria["longitud"]
-        fecha = ultima_telemetria["fecha_registro"]
+    nuevo_registro = {
+        "id": PROXIMO_ID_DOSIS,
+        "fecha": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
+        "paciente": data.get('paciente', 'Desconocido'),
+        "peso": peso,
+        "propietario": data.get('propietario', 'N/A'),
+        "telefono": data.get('telefono', 'N/A'),
+        "correo": data.get('correo', 'N/A'),
+        "direccion": data.get('direccion', 'N/A'),
+        "farmaco": data.get('farmaco', 'N/A'),
+        "dosis_mg_kg": dosis_mg_kg,
+        "concentracion": concentracion,
+        "volumen_ml": volumen_ml,
+        "sugerencias": data.get('sugerencias', 'Sin observaciones.')
+    }
+    
+    HISTORIAL_DOSIS.append(nuevo_registro)
+    PROXIMO_ID_DOSIS += 1
+    
+    return jsonify({"status": "success", "id": nuevo_registro["id"]}), 201
 
-        mag = (ax**2 + ay**2 + az**2)**0.5
-        estado_act = "En Reposo" if mag < 1.2 else "En Movimiento"
+@app.route('/api/historial_dosis', methods=['GET'])
+def obtener_historial_dosis():
+    """Devuelve las prescripciones almacenadas para la tabla en el modal."""
+    return jsonify(HISTORIAL_DOSIS)
 
-        if temp > 39.2 or bpm > 140:
-            salud = "Alerta Médica"
-            badge = "bg-danger"
-            mensaje = "Parámetros fuera de rango normal."
-        else:
-            salud = "Estable"
-            badge = "bg-success"
-            mensaje = "Constantes vitales dentro del rango óptimo."
-
-        return jsonify({
-            "conectado": True,
-            "temperatura": temp,
-            "ritmo_cardiaco": bpm,
-            "pechera_puesta": bool(hall == 1),
-            "actividad": {"estado": estado_act},
-            "diagnostico": {
-                "salud_mascota": salud,
-                "badge_class": badge,
-                "mensaje": mensaje
-            },
-            "gps": {"valido": bool(lat != 0 and lon != 0), "latitud": lat, "longitud": lon},
-            "ultima_actualizacion": fecha
-        })
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
+@app.route('/api/eliminar_dosis/<int:id_dosis>', methods=['DELETE'])
+def eliminar_dosis(id_dosis):
+    """Elimina una fila específica de la base de datos por ID."""
+    global HISTORIAL_DOSIS
+    HISTORIAL_DOSIS = [item for item in HISTORIAL_DOSIS if item['id'] != id_dosis]
+    return jsonify({"status": "success", "deleted_id": id_dosis})
 
 @app.route('/logout')
 def logout():
     session.clear()
-    flash("Has cerrado sesión.", "info")
-    return redirect(url_for('login'))
+    return redirect(url_for('panel_medico'))
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    app.run(debug=True, host='0.0.0.0', port=5000)

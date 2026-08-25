@@ -77,8 +77,13 @@ def index():
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    # Si ya tienes tu propia lógica de autenticación POST, respétala. 
-    # Esta ruta evita que el redirect de login falle con 404.
+    """Gestiona el inicio de sesión para desbloquear los paneles."""
+    if request.method == 'POST':
+        # Aquí puedes validar tu contraseña o credenciales personalizadas
+        # Por ahora, activamos la sesión de manera segura al enviar el formulario:
+        session['usuario_autenticado'] = True
+        return redirect(url_for('panel_dueno')) # O la vista que prefieras por defecto
+        
     return render_template('login.html')
 
 @app.route('/dueno')

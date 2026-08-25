@@ -56,10 +56,11 @@ def evaluar_estado_clinico(temp, bpm, arnes_puesto):
             "mensaje": "Constantes vitales dentro de rangos fisiológicos estables."
         }
 
-@app.route('/medico')
-def panel_medico():
-    return render_template('medico.html')
-
+@app.route('/dueno')
+def panel_dueno():
+    """Ruta para el panel o vista del dueño / cliente."""
+    return render_template('dueno.html')
+    
 @app.route('/api/telemetria', methods=['GET'])
 def api_telemetria():
     """Genera/Lee los datos telemétricos en tiempo real para el visor del médico."""

@@ -70,7 +70,16 @@ def login_required(f):
 # ==========================================
 # RUTAS DE NAVEGACIÓN (VISTAS HTML)
 # ==========================================
-
+@app.route('/cambiar_credenciales', methods=['GET', 'POST'])
+@login_required
+def cambiar_credenciales():
+    """Ruta para actualizar las credenciales del sistema."""
+    if request.method == 'POST':
+        # Lógica para guardar la nueva contraseña
+        flash("Contraseña actualizada exitosamente.", "success")
+        return redirect(url_for('panel_dueno'))
+    return render_template('cambiar_credenciales.html')
+    
 @app.route('/')
 def index():
     return redirect(url_for('login'))

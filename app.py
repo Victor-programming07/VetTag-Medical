@@ -56,6 +56,15 @@ def evaluar_estado_clinico(temp, bpm, arnes_puesto):
             "mensaje": "Constantes vitales dentro de rangos fisiológicos estables."
         }
 
+def login_required(f):
+    """Protege las rutas que requieren sesión activa."""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not session.get('usuario_autenticado'):
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
+
 @app.route('/dueno')
 @login_required
 def panel_dueno():

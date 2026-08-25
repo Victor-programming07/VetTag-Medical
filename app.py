@@ -57,8 +57,9 @@ def evaluar_estado_clinico(temp, bpm, arnes_puesto):
         }
 
 @app.route('/dueno')
+@login_required
 def panel_dueno():
-    """Ruta para el panel o vista del dueño / cliente."""
+    """Ruta protegida para la interfaz del dueño."""
     return render_template('dueno.html')
     
 @app.route('/api/telemetria', methods=['GET'])

@@ -113,32 +113,23 @@ def panel_medico():
 
 @app.route('/api/telemetria', methods=['GET'])
 def api_telemetria():
-    """Genera los datos telemétricos consumidos por dueno.html y medico.html"""
-    temp = round(random.uniform(37.0, 39.8), 1)
-    bpm = random.randint(70, 150)
-    pechera = random.choice([True, True, True, False])
-    actividades = [
-        {"estado": "Reposo", "icono": "🛌"},
-        {"estado": "Caminando", "icono": "🚶"},
-        {"estado": "Corriendo", "icono": "🏃"},
-        {"estado": "Agitado", "icono": "⚠️"}
-    ]
-    actividad_actual = random.choice(actividades)
-    
-    diag = evaluar_estado_clinico(temp, bpm, pechera)
-    
+    """Devuelve valores en cero a la espera de la integración física con el ESP32."""
     return jsonify({
-        "conectado": True,
-        "temperatura": temp,
-        "ritmo_cardiaco": bpm,
-        "pechera_puesta": pechera,
-        "actividad": actividad_actual,
-        "ultima_actualizacion": datetime.datetime.now().strftime("%H:%M:%S"),
-        "diagnostico": diag,
+        "conectado": False,
+        "temperatura": 0.0,
+        "ritmo_cardiaco": 0,
+        "pechera_puesta": False,
+        "actividad": {"estado": "En Espera", "icono": "⚪"},
+        "ultima_actualizacion": "---",
+        "diagnostico": {
+            "salud_mascota": "Sin Dispositivo",
+            "badge_class": "bg-secondary",
+            "mensaje": "A la espera de la conexión con el microcontrolador ESP32."
+        },
         "gps": {
-            "valido": True,
-            "latitud": -1.3458 + random.uniform(-0.001, 0.001),
-            "longitud": -80.4285 + random.uniform(-0.001, 0.001)
+            "valido": False,
+            "latitud": -1.3458,
+            "longitud": -80.4285
         }
     })
 

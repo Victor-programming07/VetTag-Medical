@@ -52,11 +52,11 @@ def evaluar_estado_clinico(temp, bpm):
             "badge_class": "bg-warning text-dark",
             "mensaje": "Frecuencia cardíaca anormalmente baja. Se sugiere monitoreo de pulso."
         }
-    elif temp == 0:
+    elif temp == 0 and bpm == 0:
         return {
-            "salud_mascota": "Sin Conexión de Sensor",
+            "salud_mascota": "Sin Conexión de Sensores",
             "badge_class": "bg-secondary",
-            "mensaje": "A la espera de datos del sensor MLX90614 en el ESP32."
+            "mensaje": "A la espera de datos físicos desde el ESP32."
         }
     else:
         return {
@@ -102,9 +102,9 @@ def cambiar_credenciales():
         return redirect(url_for('panel_medico'))
     return render_template('cambiar_credenciales.html')
 
-@app.route('/api/recibir_esp32', methods=['POST'])
+@app.route('/api/datos', methods=['POST'])
 def recibir_esp32():
-    """Endpoint único para recibir los datos del ESP32 conforme los vayas conectando."""
+    """Endpoint para recibir los datos del ESP32 de forma modular."""
     global ESTADO_HARDWARE
     data = request.get_json() or {}
     
@@ -118,7 +118,7 @@ def recibir_esp32():
         ESTADO_HARDWARE["actividad"] = data["actividad"]
         
     ESTADO_HARDWARE["ultima_actualizacion"] = datetime.datetime.now().strftime("%H:%M:%S")
-    return jsonify({"status": "success", "mensaje": "Temperatura recibida con éxito"}), 200
+    return jsonify({"status": "success", "mensaje": "Datos recibidos con éxito"}), 200
 
 @app.route('/api/telemetria', methods=['GET'])
 def api_telemetria():
@@ -165,7 +165,6 @@ def guardar_dosis():
     HISTORIAL_DOSIS.append(nuevo_registro)
     PROXIMO_ID_DOSIS += 1
     return jsonify({"status": "success", "id": nuevo_registro["id"]}), 201
-
 
 @app.route('/api/historial_dosis', methods=['GET'])
 def obtener_historial_dosis():

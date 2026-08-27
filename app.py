@@ -74,8 +74,9 @@ def login_required(f):
     return decorated_function
 
 @app.route('/')
-def index():
-    return redirect(url_for('login'))
+def inicio():
+    # Muestra primero la pantalla con el logotipo y la frase para el código QR
+    return render_template('logotipo.html')
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():

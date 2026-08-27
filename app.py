@@ -2,7 +2,7 @@ import os
 import datetime
 from datetime import timezone, timedelta
 from functools import wraps
-from flask import Flask, render_template, request, jsonify, redirect, url_for, session, flash
+from flask import Flask, render_template, request, jsonify, redirect, url_for, session, flash, send_from_directory
 
 app = Flask(__name__)
 app.secret_key = "vettag_telemetry_secure_key"
@@ -180,6 +180,10 @@ def eliminar_dosis(id_dosis):
 def logout():
     session.clear()
     return redirect(url_for('login'))
+
+@app.route('/manifest.json')
+def serve_manifest():
+    return send_from_directory('.', 'manifest.json')
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)

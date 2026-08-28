@@ -115,45 +115,148 @@ estado_telemetria_actual = {
 
 @app.route('/api/actualizar_telemetria', methods=['POST'])
 def actualizar_telemetria():
+
     global estado_telemetria_actual
-    data = request.get_json()
-    if not data:
-        return jsonify({"status": "error", "mensaje": "JSON vacío"}), 400
-    
-    # Capturar opcionalmente ritmo cardíaco si se envía
-    if "ritmo_cardiaco" in data:
-        estado_telemetria_actual["ritmo_cardiaco"] = int(data["ritmo_cardiaco"])
-    
-    # Capturar ejes del MPU6050
-    if "acx" in data:
-        estado_telemetria_actual["acx"] = int(data["acx"])
-    if "acy" in data:
-        estado_telemetria_actual["acy"] = int(data["acy"])
-    if "acz" in data:
-        estado_telemetria_actual["acz"] = int(data["acz"])
-        
-    estado_telemetria_actual["pechera_puesta"] = True
-    return jsonify({"status": "success"}), 200
+
+    try:
+
+        data = request.get_json()
+
+        if not data:
+            return jsonify({
+                "status": "error",
+                "mensaje": "JSON vacío"
+            }), 400
+
+        # ==========================================
+        # TEMPERATURA
+        # ==========================================
+
+        if "temperatura" in data:
+            estado_telemetria_actual["temperatura"] = float(
+                data["temperatura"]
+            )
+
+        # ==========================================
+        # RITMO CARDIACO
+        # ==========================================
+
+        if "ritmo_cardiaco" in data:
+            estado_telemetria_actual["ritmo_cardiaco"] = int(
+                data["ritmo_cardiaco"]
+            )
+
+        # ==========================================
+        # ACTIVIDAD
+        # ==========================================
+
+        if "actividad" in data:
+            estado_telemetria_actual["actividad"] = str(
+                data["actividad"]
+            )
+
+        # ==========================================
+        # ACELERÓMETRO MPU6050
+        # ==========================================
+
+        if "acx" in data:
+            estado_telemetria_actual["acx"] = float(
+                data["acx"]
+            )
+
+        if "acy" in data:
+            estado_telemetria_actual["acy"] = float(
+                data["acy"]
+            )
+
+        if "acz" in data:
+            estado_telemetria_actual["acz"] = float(
+                data["acz"]
+            )
+
+        # ==========================================
+        # PECHERA
+        # ==========================================
+
+        estado_telemetria_actual["pechera_puesta"] = True
+
+        # ==========================================
+        # RESPUESTA
+        # ==========================================
+
+        print("================================")
+        print("TELEMETRIA RECIBIDA")
+        print("Temperatura:",
+              estado_telemetria_actual.get("temperatura"))
+        print("Ritmo:",
+              estado_telemetria_actual.get("ritmo_cardiaco"))
+        print("Actividad:",
+              estado_telemetria_actual.get("actividad"))
+        print("================================")
+
+        return jsonify({
+            "status": "success",
+            "mensaje": "Telemetría recibida correctamente"
+        }), 200
+
+    except Exception as e:
+
+        print("ERROR TELEMETRIA:", str(e))
+
+        return jsonify({
+            "status": "error",
+            "mensaje": str(e)
+        }), 500
+
 
 @app.route('/api/telemetria', methods=['GET'])
 @login_required
 def api_telemetria():
+
     global estado_telemetria_actual
+
     ahora = obtener_hora_ecuador()
-    
-    # Formatear la actividad como texto para que el HTML la pinte sin errores
-    ax = estado_telemetria_actual.get("acx", 0)
-    ay = estado_telemetria_actual.get("acy", 0)
-    az = estado_telemetria_actual.get("acz", 0)
-    
-    estado_texto = f"X:{ax} Y:{ay} Z:{az}" if (ax != 0 or ay != 0) else "En espera de movimiento"
+
+    # ==========================================
+    # OBTENER DATOS ACTUALES
+    # ==========================================
+
+    temperatura = estado_telemetria_actual.get(
+        "temperatura",
+        36.5
+    )
+
+    ritmo_cardiaco = estado_telemetria_actual.get(
+        "ritmo_cardiaco",
+        75
+    )
+
+    actividad = estado_telemetria_actual.get(
+        "actividad",
+        "En espera de movimiento"
+    )
+
+    pechera = estado_telemetria_actual.get(
+        "pechera_puesta",
+        False
+    )
+
+    # ==========================================
+    # RESPUESTA PARA EL DASHBOARD
+    # ==========================================
 
     return jsonify({
-        "temperatura": 36.5,  # Valor temporal de prueba para quitar el --°C
-        "ritmo_cardiaco": 75, # Valor temporal de prueba para quitar el --
-        "pechera_puesta": True,
-        "actividad": estado_texto,
-        "ultima_actualizacion": ahora.strftime("%H:%M:%S")
+
+        "temperatura": temperatura,
+
+        "ritmo_cardiaco": ritmo_cardiaco,
+
+        "pechera_puesta": pechera,
+
+        "actividad": actividad,
+
+        "ultima_actualizacion":
+            ahora.strftime("%H:%M:%S")
     })
     
 @app.route('/api/guardar_dosis', methods=['POST'])

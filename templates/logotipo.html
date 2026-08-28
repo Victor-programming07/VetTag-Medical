@@ -43,10 +43,10 @@
 <body>
 
  <div class="text-center splash-content px-3" onclick="irAlLogin()">
-    <div class="mb-4" style="width: 200px; height: 160px; margin: 0 auto; overflow: hidden; display: flex; justify-content: center; align-items: center;">
-        <img src="{{ url_for('static', filename='logo_limpio.png') }}" alt="Vet Tag Logo" style="width: 200px; height: auto;">
+    <div class="mb-3">
+        <!-- Se eliminaron las clases: shadow-sm rounded-circle bg-white p-2 -->
+        <img src="{{ url_for('static', filename='logo_limpio.png') }}" alt="Vet Tag Logo" class="img-fluid" style="max-width: 160px; height: auto;">
     </div>
-    
     <h1 class="fw-bold mb-2">VetTag Workstation</h1>
     <p class="text-white-50 fs-5 mb-4">"Innovación en telemetría y salud veterinaria en tiempo real"</p>
     

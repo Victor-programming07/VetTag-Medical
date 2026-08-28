@@ -42,10 +42,13 @@
 </head>
 <body>
 
-   <div class="text-center splash-content px-3" onclick="irAlLogin()">
-    <div class="mb-3">
-        <img src="{{ url_for('static', filename='logo.jpg') }}" alt="Vet Tag Logo" class="img-fluid shadow-sm rounded-circle bg-white p-2" style="max-width: 130px; height: auto;">
+  <div class="text-center splash-content px-3" onclick="irAlLogin()">
+    <!-- Contenedor del logo: Se le quitó el fondo blanco, sombra y borde -->
+    <div class="mb-4"> 
+        <!-- Ahora carga solo el escudo, más grande y sin recortes -->
+        <img src="{{ url_for('static', filename=logo(1).jpg') }}" alt="Vet Tag Logo Emblema" class="img-fluid" style="max-width: 200px; height: auto;">
     </div>
+    
     <h1 class="fw-bold mb-2">VetTag Workstation</h1>
     <p class="text-white-50 fs-5 mb-4">"Innovación en telemetría y salud veterinaria en tiempo real"</p>
     

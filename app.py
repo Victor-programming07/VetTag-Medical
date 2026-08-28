@@ -121,22 +121,36 @@ def recibir_esp32():
     ESTADO_HARDWARE["ultima_actualizacion"] = datetime.datetime.now().strftime("%H:%M:%S")
     return jsonify({"status": "success", "mensaje": "Datos recibidos con éxito"}), 200
 
+# Variable temporal exclusiva para la prueba de pulso
+estado_prueba_pulso = {
+    "ritmo_cardiaco": 0  # Valor inicial de prueba
+}
+
+@app.route('/api/actualizar_telemetria', methods=['POST'])
+def actualizar_telemetria():
+    global estado_prueba_pulso
+    data = request.get_json()
+    if data and "ritmo_cardiaco" in data:
+        estado_prueba_pulso["ritmo_cardiaco"] = int(data["ritmo_cardiaco"])
+        return jsonify({"status": "success"}), 200
+    return jsonify({"status": "error"}), 400
+
 @app.route('/api/telemetria', methods=['GET'])
+@login_required
 def api_telemetria():
-    """Devuelve a los paneles web los datos reales leídos por el ESP32."""
-    global ESTADO_HARDWARE
-    temp = ESTADO_HARDWARE["temperatura"]
-    bpm = ESTADO_HARDWARE["ritmo_cardiaco"]
-    
-    diag = evaluar_estado_clinico(temp, bpm)
+    global estado_prueba_pulso
+    bpm = estado_prueba_pulso["ritmo_cardiaco"]
+    ahora = obtener_hora_ecuador()
+    diag = evaluar_estado_clinico(38.0, bpm, True)
     
     return jsonify({
-        "conectado": ESTADO_HARDWARE["conectado"],
-        "temperatura": temp,
+        "temperatura": 38.0,
         "ritmo_cardiaco": bpm,
-        "actividad": ESTADO_HARDWARE["actividad"],
-        "ultima_actualizacion": ESTADO_HARDWARE["ultima_actualizacion"],
-        "diagnostico": diag
+        "pechera_puesta": True,
+        "actividad": {"estado": "Prueba de Pulso"},
+        "ultima_actualizacion": ahora.strftime("%H:%M:%S"),
+        "diagnostico": diag,
+        "gps": {"valido": False, "latitud": -1.3458, "longitud": -80.4285}
     })
 
 @app.route('/api/guardar_dosis', methods=['POST'])

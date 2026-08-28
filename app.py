@@ -1,3 +1,4 @@
+
 ```python
 import os
 import datetime
@@ -18,7 +19,7 @@ from flask import (
 
 
 # ==========================================================
-# CONFIGURACIÓN FLASK
+# FLASK
 # ==========================================================
 
 app = Flask(__name__)
@@ -27,7 +28,7 @@ app.secret_key = "vettag_telemetry_secure_key"
 
 
 # ==========================================================
-# HISTORIAL DE PRESCRIPCIONES
+# HISTORIAL DE DOSIS
 # ==========================================================
 
 HISTORIAL_DOSIS = []
@@ -52,41 +53,44 @@ ESTADO_HARDWARE = {
 
 
 # ==========================================================
-# ESTADO DE TELEMETRÍA
+# TELEMETRÍA ACTUAL
 # ==========================================================
 
 estado_telemetria_actual = {
-
     "ritmo_cardiaco": 0,
-
     "temperatura": 0.0,
-
     "actividad": "En espera de sensor",
 
     "acx": 0.0,
-
     "acy": 0.0,
-
     "acz": 0.0,
 
     "pechera_puesta": False,
-
     "conectado": False,
-
     "ultima_actualizacion": "---"
 }
 
 
 # ==========================================================
-# DIAGNÓSTICO CLÍNICO
+# HORA ECUADOR
+# ==========================================================
+
+def obtener_hora_ecuador():
+
+    zona_ecuador = timezone(
+        timedelta(hours=-5)
+    )
+
+    return datetime.datetime.now(
+        zona_ecuador
+    )
+
+
+# ==========================================================
+# DIAGNÓSTICO
 # ==========================================================
 
 def evaluar_estado_clinico(temp, bpm):
-
-    """
-    Calcula el estado clínico según temperatura
-    y ritmo cardíaco.
-    """
 
     if temp > 39.2 and bpm > 140:
 
@@ -150,8 +154,7 @@ def evaluar_estado_clinico(temp, bpm):
             "salud_mascota": "Sin Conexión de Sensores",
             "badge_class": "bg-secondary",
             "mensaje": (
-                "A la espera de datos físicos "
-                "desde el ESP32."
+                "A la espera de datos físicos desde el ESP32."
             )
         }
 
@@ -168,21 +171,6 @@ def evaluar_estado_clinico(temp, bpm):
 
 
 # ==========================================================
-# HORA DE ECUADOR
-# ==========================================================
-
-def obtener_hora_ecuador():
-
-    zona_ecuador = timezone(
-        timedelta(hours=-5)
-    )
-
-    return datetime.datetime.now(
-        zona_ecuador
-    )
-
-
-# ==========================================================
 # LOGIN REQUIRED
 # ==========================================================
 
@@ -192,11 +180,11 @@ def login_required(f):
     def decorated_function(*args, **kwargs):
 
         if not session.get(
-            'usuario_autenticado'
+            "usuario_autenticado"
         ):
 
             return redirect(
-                url_for('login')
+                url_for("login")
             )
 
         return f(*args, **kwargs)
@@ -208,11 +196,11 @@ def login_required(f):
 # INICIO
 # ==========================================================
 
-@app.route('/')
+@app.route("/")
 def inicio():
 
     return render_template(
-        'logotipo.html'
+        "logotipo.html"
     )
 
 
@@ -221,23 +209,23 @@ def inicio():
 # ==========================================================
 
 @app.route(
-    '/login',
-    methods=['GET', 'POST']
+    "/login",
+    methods=["GET", "POST"]
 )
 def login():
 
-    if request.method == 'POST':
+    if request.method == "POST":
 
         session[
-            'usuario_autenticado'
+            "usuario_autenticado"
         ] = True
 
         return redirect(
-            url_for('panel_dueno')
+            url_for("panel_dueno")
         )
 
     return render_template(
-        'login.html'
+        "login.html"
     )
 
 
@@ -245,12 +233,12 @@ def login():
 # PANEL DUEÑO
 # ==========================================================
 
-@app.route('/dueno')
+@app.route("/dueno")
 @login_required
 def panel_dueno():
 
     return render_template(
-        'dueno.html'
+        "dueno.html"
     )
 
 
@@ -258,12 +246,12 @@ def panel_dueno():
 # PANEL MÉDICO
 # ==========================================================
 
-@app.route('/medico')
+@app.route("/medico")
 @login_required
 def panel_medico():
 
     return render_template(
-        'medico.html'
+        "medico.html"
     )
 
 
@@ -272,13 +260,13 @@ def panel_medico():
 # ==========================================================
 
 @app.route(
-    '/cambiar_credenciales',
-    methods=['GET', 'POST']
+    "/cambiar_credenciales",
+    methods=["GET", "POST"]
 )
 @login_required
 def cambiar_credenciales():
 
-    if request.method == 'POST':
+    if request.method == "POST":
 
         flash(
             "Credenciales actualizadas correctamente.",
@@ -286,22 +274,21 @@ def cambiar_credenciales():
         )
 
         return redirect(
-            url_for('panel_medico')
+            url_for("panel_medico")
         )
 
     return render_template(
-        'cambiar_credenciales.html'
+        "cambiar_credenciales.html"
     )
 
 
 # ==========================================================
-# API:
 # ESP32 → FLASK
 # ==========================================================
 
 @app.route(
-    '/api/actualizar_telemetria',
-    methods=['POST']
+    "/api/actualizar_telemetria",
+    methods=["POST"]
 )
 def actualizar_telemetria():
 
@@ -310,11 +297,9 @@ def actualizar_telemetria():
 
     try:
 
-        data = request.get_json()
-
-        # --------------------------------------------------
-        # COMPROBAR JSON
-        # --------------------------------------------------
+        data = request.get_json(
+            silent=True
+        )
 
         if not data:
 
@@ -324,15 +309,9 @@ def actualizar_telemetria():
             }), 400
 
 
-        print()
-        print("========================================")
-        print("      TELEMETRIA RECIBIDA DEL ESP32")
-        print("========================================")
-
-
-        # --------------------------------------------------
+        # ==================================================
         # TEMPERATURA
-        # --------------------------------------------------
+        # ==================================================
 
         if "temperatura" in data:
 
@@ -343,9 +322,9 @@ def actualizar_telemetria():
             )
 
 
-        # --------------------------------------------------
+        # ==================================================
         # RITMO CARDIACO
-        # --------------------------------------------------
+        # ==================================================
 
         if "ritmo_cardiaco" in data:
 
@@ -356,9 +335,9 @@ def actualizar_telemetria():
             )
 
 
-        # --------------------------------------------------
+        # ==================================================
         # ACTIVIDAD
-        # --------------------------------------------------
+        # ==================================================
 
         if "actividad" in data:
 
@@ -369,9 +348,9 @@ def actualizar_telemetria():
             )
 
 
-        # --------------------------------------------------
-        # MPU6050 - EJE X
-        # --------------------------------------------------
+        # ==================================================
+        # MPU6050 X
+        # ==================================================
 
         if "acx" in data:
 
@@ -382,9 +361,9 @@ def actualizar_telemetria():
             )
 
 
-        # --------------------------------------------------
-        # MPU6050 - EJE Y
-        # --------------------------------------------------
+        # ==================================================
+        # MPU6050 Y
+        # ==================================================
 
         if "acy" in data:
 
@@ -395,9 +374,9 @@ def actualizar_telemetria():
             )
 
 
-        # --------------------------------------------------
-        # MPU6050 - EJE Z
-        # --------------------------------------------------
+        # ==================================================
+        # MPU6050 Z
+        # ==================================================
 
         if "acz" in data:
 
@@ -408,23 +387,22 @@ def actualizar_telemetria():
             )
 
 
-        # --------------------------------------------------
-        # CONEXIÓN DEL HARDWARE
-        # --------------------------------------------------
+        # ==================================================
+        # CONEXIÓN
+        # ==================================================
 
         estado_telemetria_actual[
             "conectado"
         ] = True
-
 
         estado_telemetria_actual[
             "pechera_puesta"
         ] = True
 
 
-        # --------------------------------------------------
+        # ==================================================
         # HORA
-        # --------------------------------------------------
+        # ==================================================
 
         ahora = obtener_hora_ecuador()
 
@@ -435,9 +413,9 @@ def actualizar_telemetria():
         )
 
 
-        # --------------------------------------------------
-        # ACTUALIZAR ESTADO DEL HARDWARE
-        # --------------------------------------------------
+        # ==================================================
+        # ACTUALIZAR HARDWARE
+        # ==================================================
 
         ESTADO_HARDWARE[
             "conectado"
@@ -472,9 +450,14 @@ def actualizar_telemetria():
         ]
 
 
-        # --------------------------------------------------
-        # MOSTRAR DATOS EN CONSOLA
-        # --------------------------------------------------
+        # ==================================================
+        # LOG
+        # ==================================================
+
+        print()
+        print("========================================")
+        print("      TELEMETRIA RECIBIDA DEL ESP32")
+        print("========================================")
 
         print(
             "Temperatura:",
@@ -529,48 +512,32 @@ def actualizar_telemetria():
         print()
 
 
-        # --------------------------------------------------
-        # RESPUESTA AL ESP32
-        # --------------------------------------------------
-
         return jsonify({
-
             "status": "success",
-
-            "mensaje":
-                "Telemetría recibida correctamente"
-
+            "mensaje": "Telemetría recibida correctamente"
         }), 200
 
 
     except Exception as e:
 
-        print()
         print(
-            "ERROR RECIBIENDO TELEMETRIA:"
+            "ERROR TELEMETRIA:",
+            str(e)
         )
 
-        print(str(e))
-
-        print()
-
         return jsonify({
-
             "status": "error",
-
             "mensaje": str(e)
-
         }), 500
 
 
 # ==========================================================
-# API:
 # FLASK → HTML
 # ==========================================================
 
 @app.route(
-    '/api/telemetria',
-    methods=['GET']
+    "/api/telemetria",
+    methods=["GET"]
 )
 @login_required
 def api_telemetria():
@@ -578,9 +545,9 @@ def api_telemetria():
     global estado_telemetria_actual
 
 
-    # --------------------------------------------------
-    # OBTENER DATOS
-    # --------------------------------------------------
+    # ==================================================
+    # DATOS
+    # ==================================================
 
     temperatura = estado_telemetria_actual.get(
         "temperatura",
@@ -628,40 +595,47 @@ def api_telemetria():
     )
 
 
-    # --------------------------------------------------
-    # DETERMINAR ICONO
-    # --------------------------------------------------
+    # ==================================================
+    # ICONO ACTIVIDAD
+    # ==================================================
+
+    actividad_lower = actividad.lower()
+
 
     if (
-        "Corriendo" in actividad or
-        "Agitado" in actividad
+        "corriendo" in actividad_lower
+        or "agitado" in actividad_lower
     ):
 
         icono = "🔴"
 
+
     elif (
-        "Caminando" in actividad or
-        "Movimiento" in actividad
+        "caminando" in actividad_lower
+        or "movimiento" in actividad_lower
     ):
 
         icono = "🟡"
 
-    elif "Reposo" in actividad:
+
+    elif "reposo" in actividad_lower:
 
         icono = "🟢"
 
-    elif "espera" in actividad.lower():
+
+    elif "espera" in actividad_lower:
 
         icono = "⏳"
+
 
     else:
 
         icono = "📡"
 
 
-    # --------------------------------------------------
+    # ==================================================
     # DIAGNÓSTICO
-    # --------------------------------------------------
+    # ==================================================
 
     diagnostico = evaluar_estado_clinico(
         temperatura,
@@ -669,34 +643,44 @@ def api_telemetria():
     )
 
 
-    # --------------------------------------------------
-    # RESPUESTA JSON
-    # --------------------------------------------------
+    # ==================================================
+    # RESPUESTA PARA DUENO.HTML
+    # ==================================================
 
     return jsonify({
 
-        "conectado": conectado,
+        "conectado":
+            conectado,
 
-        "temperatura": temperatura,
+        "temperatura":
+            temperatura,
 
-        "ritmo_cardiaco": ritmo_cardiaco,
+        "ritmo_cardiaco":
+            ritmo_cardiaco,
 
-        "pechera_puesta": pechera,
+        "pechera_puesta":
+            pechera,
 
         "actividad": {
 
-            "estado": actividad,
+            "estado":
+                actividad,
 
-            "icono": icono
+            "icono":
+                icono
         },
 
-        "diagnostico": diagnostico,
+        "diagnostico":
+            diagnostico,
 
-        "acx": acx,
+        "acx":
+            acx,
 
-        "acy": acy,
+        "acy":
+            acy,
 
-        "acz": acz,
+        "acz":
+            acz,
 
         "ultima_actualizacion":
             ultima_actualizacion
@@ -708,8 +692,8 @@ def api_telemetria():
 # ==========================================================
 
 @app.route(
-    '/api/guardar_dosis',
-    methods=['POST']
+    "/api/guardar_dosis",
+    methods=["POST"]
 )
 def guardar_dosis():
 
@@ -720,29 +704,29 @@ def guardar_dosis():
 
     peso = float(
         data.get(
-            'peso',
+            "peso",
             0.0
         )
     )
 
     dosis_mg_kg = float(
         data.get(
-            'dosis_mg_kg',
+            "dosis_mg_kg",
             0.0
         )
     )
 
     concentracion = float(
         data.get(
-            'concentracion',
+            "concentracion",
             1.0
         )
     )
 
 
-    volumen_ml = (
+    if concentracion > 0:
 
-        round(
+        volumen_ml = round(
             (
                 peso *
                 dosis_mg_kg
@@ -750,10 +734,9 @@ def guardar_dosis():
             2
         )
 
-        if concentracion > 0
+    else:
 
-        else 0.0
-    )
+        volumen_ml = 0.0
 
 
     nuevo_registro = {
@@ -768,8 +751,8 @@ def guardar_dosis():
 
         "paciente":
             data.get(
-                'paciente',
-                'Desconocido'
+                "paciente",
+                "Desconocido"
             ),
 
         "peso":
@@ -777,32 +760,32 @@ def guardar_dosis():
 
         "propietario":
             data.get(
-                'propietario',
-                'N/A'
+                "propietario",
+                "N/A"
             ),
 
         "telefono":
             data.get(
-                'telefono',
-                'N/A'
+                "telefono",
+                "N/A"
             ),
 
         "correo":
             data.get(
-                'correo',
-                'N/A'
+                "correo",
+                "N/A"
             ),
 
         "direccion":
             data.get(
-                'direccion',
-                'N/A'
+                "direccion",
+                "N/A"
             ),
 
         "farmaco":
             data.get(
-                'farmaco',
-                'N/A'
+                "farmaco",
+                "N/A"
             ),
 
         "dosis_mg_kg":
@@ -816,8 +799,8 @@ def guardar_dosis():
 
         "sugerencias":
             data.get(
-                'sugerencias',
-                'Sin observaciones.'
+                "sugerencias",
+                "Sin observaciones."
             )
     }
 
@@ -831,7 +814,8 @@ def guardar_dosis():
 
     return jsonify({
 
-        "status": "success",
+        "status":
+            "success",
 
         "id":
             nuevo_registro["id"]
@@ -840,12 +824,12 @@ def guardar_dosis():
 
 
 # ==========================================================
-# HISTORIAL DE DOSIS
+# HISTORIAL
 # ==========================================================
 
 @app.route(
-    '/api/historial_dosis',
-    methods=['GET']
+    "/api/historial_dosis",
+    methods=["GET"]
 )
 def obtener_historial_dosis():
 
@@ -859,8 +843,8 @@ def obtener_historial_dosis():
 # ==========================================================
 
 @app.route(
-    '/api/eliminar_dosis/<int:id_dosis>',
-    methods=['DELETE']
+    "/api/eliminar_dosis/<int:id_dosis>",
+    methods=["DELETE"]
 )
 def eliminar_dosis(id_dosis):
 
@@ -872,17 +856,17 @@ def eliminar_dosis(id_dosis):
 
         for item in HISTORIAL_DOSIS
 
-        if item['id'] != id_dosis
+        if item["id"] != id_dosis
     ]
 
 
     return jsonify({
 
-        "status": "success",
+        "status":
+            "success",
 
         "deleted_id":
             id_dosis
-
     })
 
 
@@ -890,13 +874,13 @@ def eliminar_dosis(id_dosis):
 # LOGOUT
 # ==========================================================
 
-@app.route('/logout')
+@app.route("/logout")
 def logout():
 
     session.clear()
 
     return redirect(
-        url_for('login')
+        url_for("login")
     )
 
 
@@ -904,24 +888,31 @@ def logout():
 # MANIFEST
 # ==========================================================
 
-@app.route('/manifest.json')
+@app.route("/manifest.json")
 def serve_manifest():
 
     return send_from_directory(
-        '.',
-        'manifest.json'
+        ".",
+        "manifest.json"
     )
 
 
 # ==========================================================
-# EJECUTAR SERVIDOR
+# EJECUCIÓN LOCAL
 # ==========================================================
 
-if __name__ == '__main__':
+if __name__ == "__main__":
+
+    port = int(
+        os.environ.get(
+            "PORT",
+            5000
+        )
+    )
 
     app.run(
-        debug=True,
-        host='0.0.0.0',
-        port=5000
+        host="0.0.0.0",
+        port=port
     )
 ```
+

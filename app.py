@@ -140,20 +140,22 @@ def actualizar_telemetria():
 def api_telemetria():
     global estado_telemetria_actual
     ahora = obtener_hora_ecuador()
-    diag = evaluar_estado_clinico(estado_telemetria_actual["temperatura"], estado_telemetria_actual["ritmo_cardiaco"], True)
     
+    # Formatear la actividad como texto para que el HTML la pinte sin errores
+    ax = estado_telemetria_actual.get("acx", 0)
+    ay = estado_telemetria_actual.get("acy", 0)
+    az = estado_telemetria_actual.get("acz", 0)
+    
+    estado_texto = f"X:{ax} Y:{ay} Z:{az}" if (ax != 0 or ay != 0) else "En espera de movimiento"
+
     return jsonify({
-        "temperatura": estado_telemetria_actual["temperatura"],
-        "ritmo_cardiaco": estado_telemetria_actual["ritmo_cardiaco"],
-        "acx": estado_telemetria_actual["acx"],
-        "acy": estado_telemetria_actual["acy"],
-        "acz": estado_telemetria_actual["acz"],
-        "pechera_puesta": estado_telemetria_actual["pechera_puesta"],
-        "actividad": {"estado": "Monitoreo MPU6050 Activo"},
-        "ultima_actualizacion": ahora.strftime("%H:%M:%S"),
-        "diagnostico": diag,
-        "gps": {"valido": False, "latitud": -1.3458, "longitud": -80.4285}
+        "temperatura": 36.5,  # Valor temporal de prueba para quitar el --°C
+        "ritmo_cardiaco": 75, # Valor temporal de prueba para quitar el --
+        "pechera_puesta": True,
+        "actividad": estado_texto,
+        "ultima_actualizacion": ahora.strftime("%H:%M:%S")
     })
+    
 @app.route('/api/guardar_dosis', methods=['POST'])
 def guardar_dosis():
     global PROXIMO_ID_DOSIS

@@ -1,5 +1,4 @@
 
-
 import os
 import datetime
 from datetime import timezone, timedelta
@@ -13,7 +12,7 @@ app.secret_key = "vettag_telemetry_secure_key"
 HISTORIAL_DOSIS = []
 PROXIMO_ID_DOSIS = 1
 
-# Estado global para recibir los datos físicos del ESP32
+# Estado global para recibir los datos físicos del ESP32 paso a paso
 ESTADO_HARDWARE = {
     "conectado": False,
     "temperatura": 0.0,
@@ -26,13 +25,8 @@ ESTADO_HARDWARE = {
 }
 
 
-def obtener_hora_ecuador():
-    zona_ecuador = timezone(timedelta(hours=-5))
-    return datetime.datetime.now(zona_ecuador)
-
-
 def evaluar_estado_clinico(temp, bpm):
-    """Calcula el diagnóstico según los rangos vitales."""
+    """Calcula el diagnóstico por IA según los rangos vitales del paciente."""
 
     if temp > 39.2 and bpm > 140:
         return {
@@ -87,21 +81,28 @@ def evaluar_estado_clinico(temp, bpm):
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
+
         if not session.get('usuario_autenticado'):
             return redirect(url_for('login'))
+
         return f(*args, **kwargs)
+
     return decorated_function
 
 
 @app.route('/')
 def inicio():
+    # Muestra primero la pantalla con el logotipo y la frase para el código QR
     return render_template('logotipo.html')
 
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+
     if request.method == 'POST':
+
         session['usuario_autenticado'] = True
+
         return redirect(url_for('panel_dueno'))
 
     return render_template('login.html')
@@ -110,12 +111,14 @@ def login():
 @app.route('/dueno')
 @login_required
 def panel_dueno():
+
     return render_template('dueno.html')
 
 
 @app.route('/medico')
 @login_required
 def panel_medico():
+
     return render_template('medico.html')
 
 
@@ -124,31 +127,44 @@ def panel_medico():
 def cambiar_credenciales():
 
     if request.method == 'POST':
-        flash("Credenciales actualizadas correctamente.", "success")
+
+        flash(
+            "Credenciales actualizadas correctamente.",
+            "success"
+        )
+
         return redirect(url_for('panel_medico'))
 
     return render_template('cambiar_credenciales.html')
 
 
 # ==========================================================
-# TELEMETRÍA
+# ESTADO DE TELEMETRIA
 # ==========================================================
 
 estado_telemetria_actual = {
+
     "ritmo_cardiaco": 0,
+
     "temperatura": 38.0,
-    "actividad": "En espera de sensor",
+
     "acx": 0.0,
+
     "acy": 0.0,
+
     "acz": 0.0,
-    "pechera_puesta": True,
-    "conectado": False,
-    "ultima_actualizacion": "---"
+
+    "actividad": {
+        "estado": "En espera de sensor",
+        "icono": "⏳"
+    },
+
+    "pechera_puesta": True
 }
 
 
 # ==========================================================
-# ESP32 → FLASK
+# RECIBIR DATOS DEL ESP32
 # ==========================================================
 
 @app.route('/api/actualizar_telemetria', methods=['POST'])
@@ -161,94 +177,195 @@ def actualizar_telemetria():
         data = request.get_json()
 
         if not data:
+
             return jsonify({
                 "status": "error",
                 "mensaje": "JSON vacío"
             }), 400
 
-        # Temperatura
+
+        # ==============================================
+        # TEMPERATURA
+        # ==============================================
+
         if "temperatura" in data:
+
             estado_telemetria_actual["temperatura"] = float(
                 data["temperatura"]
             )
 
-        # Ritmo cardíaco
+
+        # ==============================================
+        # RITMO CARDIACO
+        # ==============================================
+
         if "ritmo_cardiaco" in data:
+
             estado_telemetria_actual["ritmo_cardiaco"] = int(
                 data["ritmo_cardiaco"]
             )
 
-        # Actividad
-        if "actividad" in data:
-            estado_telemetria_actual["actividad"] = str(
-                data["actividad"]
-            )
 
-        # MPU6050 X
+        # ==============================================
+        # ACELEROMETRO X
+        # ==============================================
+
         if "acx" in data:
+
             estado_telemetria_actual["acx"] = float(
                 data["acx"]
             )
 
-        # MPU6050 Y
+
+        # ==============================================
+        # ACELEROMETRO Y
+        # ==============================================
+
         if "acy" in data:
+
             estado_telemetria_actual["acy"] = float(
                 data["acy"]
             )
 
-        # MPU6050 Z
+
+        # ==============================================
+        # ACELEROMETRO Z
+        # ==============================================
+
         if "acz" in data:
+
             estado_telemetria_actual["acz"] = float(
                 data["acz"]
             )
 
-        # El ESP32 está conectado
-        estado_telemetria_actual["conectado"] = True
 
-        # Pechera conectada
-        estado_telemetria_actual["pechera_puesta"] = True
+        # ==============================================
+        # ACTIVIDAD DEL ESP32
+        # ==============================================
 
-        # Hora de última actualización
-        ahora = obtener_hora_ecuador()
-
-        estado_telemetria_actual["ultima_actualizacion"] = (
-            ahora.strftime("%H:%M:%S")
+        actividad_recibida = str(
+            data.get(
+                "actividad",
+                "En Reposo"
+            )
         )
 
-        # Mostrar en consola
+
+        # ==============================================
+        # ICONO SEGUN ACTIVIDAD
+        # ==============================================
+
+        if actividad_recibida == "En Reposo":
+
+            icono_actividad = "🟢"
+
+        elif actividad_recibida == "En Movimiento":
+
+            icono_actividad = "🟡"
+
+        elif actividad_recibida == "Movimiento Intenso":
+
+            icono_actividad = "🔴"
+
+        else:
+
+            icono_actividad = "⚪"
+
+
+        # ==============================================
+        # GUARDAR ACTIVIDAD
+        # ==============================================
+
+        estado_telemetria_actual["actividad"] = {
+
+            "estado": actividad_recibida,
+
+            "icono": icono_actividad
+
+        }
+
+
+        # ==============================================
+        # PECHERA
+        # ==============================================
+
+        estado_telemetria_actual[
+            "pechera_puesta"
+        ] = True
+
+
+        # ==============================================
+        # MOSTRAR TELEMETRIA EN CONSOLA
+        # ==============================================
+
         print("================================")
         print("TELEMETRIA RECIBIDA")
-        print("Temperatura:",
-              estado_telemetria_actual["temperatura"])
-        print("Ritmo:",
-              estado_telemetria_actual["ritmo_cardiaco"])
-        print("Actividad:",
-              estado_telemetria_actual["actividad"])
-        print("ACC X:",
-              estado_telemetria_actual["acx"])
-        print("ACC Y:",
-              estado_telemetria_actual["acy"])
-        print("ACC Z:",
-              estado_telemetria_actual["acz"])
+
+        print(
+            "Temperatura:",
+            estado_telemetria_actual["temperatura"]
+        )
+
+        print(
+            "Ritmo:",
+            estado_telemetria_actual["ritmo_cardiaco"]
+        )
+
+        print(
+            "Actividad:",
+            actividad_recibida
+        )
+
+        print(
+            "ACX:",
+            estado_telemetria_actual["acx"]
+        )
+
+        print(
+            "ACY:",
+            estado_telemetria_actual["acy"]
+        )
+
+        print(
+            "ACZ:",
+            estado_telemetria_actual["acz"]
+        )
+
         print("================================")
 
+
+        # ==============================================
+        # RESPUESTA AL ESP32
+        # ==============================================
+
         return jsonify({
+
             "status": "success",
-            "mensaje": "Telemetría recibida correctamente"
+
+            "mensaje":
+                "Telemetría recibida correctamente"
+
         }), 200
+
 
     except Exception as e:
 
-        print("ERROR TELEMETRIA:", str(e))
+        print(
+            "ERROR TELEMETRIA:",
+            str(e)
+        )
 
         return jsonify({
+
             "status": "error",
+
             "mensaje": str(e)
+
         }), 500
 
 
 # ==========================================================
-# FLASK → DUENO.HTML
+# ENVIAR DATOS A LA APLICACION
 # ==========================================================
 
 @app.route('/api/telemetria', methods=['GET'])
@@ -259,91 +376,59 @@ def api_telemetria():
 
     ahora = obtener_hora_ecuador()
 
-    # Obtener temperatura
+
+    # ==============================================
+    # DATOS ACTUALES
+    # ==============================================
+
     temperatura = estado_telemetria_actual.get(
         "temperatura",
-        0.0
+        38.5
     )
 
-    # Obtener ritmo cardíaco
+
     ritmo_cardiaco = estado_telemetria_actual.get(
         "ritmo_cardiaco",
-        0
+        85
     )
 
-    # Obtener actividad
+
     actividad = estado_telemetria_actual.get(
+
         "actividad",
-        "En espera de sensor"
+
+        {
+            "estado": "En espera de sensor",
+            "icono": "⏳"
+        }
+
     )
 
-    # Obtener pechera
+
     pechera = estado_telemetria_actual.get(
         "pechera_puesta",
         False
     )
 
-    # Obtener conexión
-    conectado = estado_telemetria_actual.get(
-        "conectado",
-        False
-    )
 
-    # Obtener acelerómetro
-    acx = estado_telemetria_actual.get(
-        "acx",
-        0.0
-    )
-
-    acy = estado_telemetria_actual.get(
-        "acy",
-        0.0
-    )
-
-    acz = estado_telemetria_actual.get(
-        "acz",
-        0.0
-    )
-
-    # ======================================================
-    # ICONO DE ACTIVIDAD
-    # ======================================================
-
-    actividad_lower = actividad.lower()
-
-    if "corriendo" in actividad_lower or "agitado" in actividad_lower:
-        icono = "🔴"
-
-    elif "caminando" in actividad_lower or "movimiento" in actividad_lower:
-        icono = "🟡"
-
-    elif "reposo" in actividad_lower:
-        icono = "🟢"
-
-    elif "espera" in actividad_lower:
-        icono = "⏳"
-
-    else:
-        icono = "📡"
-
-
-    # ======================================================
-    # DIAGNÓSTICO
-    # ======================================================
+    # ==============================================
+    # DIAGNOSTICO
+    # ==============================================
 
     diagnostico = evaluar_estado_clinico(
+
         temperatura,
+
         ritmo_cardiaco
+
     )
 
 
-    # ======================================================
-    # RESPUESTA
-    # ======================================================
+    # ==============================================
+    # RESPUESTA EXACTA QUE ESPERA DUENO.HTML
+    # ==============================================
 
     return jsonify({
-
-        "conectado": conectado,
 
         "temperatura": temperatura,
 
@@ -351,24 +436,15 @@ def api_telemetria():
 
         "pechera_puesta": pechera,
 
-        "actividad": {
-            "estado": actividad,
-            "icono": icono
-        },
+        "actividad": actividad,
 
         "diagnostico": diagnostico,
 
-        "acx": acx,
-
-        "acy": acy,
-
-        "acz": acz,
+        "conectado": True,
 
         "ultima_actualizacion":
-            estado_telemetria_actual.get(
-                "ultima_actualizacion",
-                ahora.strftime("%H:%M:%S")
-            )
+            ahora.strftime("%H:%M:%S")
+
     })
 
 
@@ -395,14 +471,15 @@ def guardar_dosis():
         data.get('concentracion', 1.0)
     )
 
-    volumen_ml = (
-        round(
-            (peso * dosis_mg_kg) / concentracion,
-            2
-        )
-        if concentracion > 0
-        else 0.0
-    )
+    volumen_ml = round(
+
+        (peso * dosis_mg_kg) /
+        concentracion,
+
+        2
+
+    ) if concentracion > 0 else 0.0
+
 
     nuevo_registro = {
 
@@ -467,15 +544,21 @@ def guardar_dosis():
             )
     }
 
+
     HISTORIAL_DOSIS.append(
         nuevo_registro
     )
 
     PROXIMO_ID_DOSIS += 1
 
+
     return jsonify({
+
         "status": "success",
-        "id": nuevo_registro["id"]
+
+        "id":
+            nuevo_registro["id"]
+
     }), 201
 
 
@@ -504,14 +587,21 @@ def eliminar_dosis(id_dosis):
     global HISTORIAL_DOSIS
 
     HISTORIAL_DOSIS = [
+
         item
+
         for item in HISTORIAL_DOSIS
+
         if item['id'] != id_dosis
+
     ]
 
     return jsonify({
+
         "status": "success",
+
         "deleted_id": id_dosis
+
     })
 
 
@@ -543,7 +633,22 @@ def serve_manifest():
 
 
 # ==========================================================
-# EJECUCIÓN LOCAL
+# HORA ECUADOR
+# ==========================================================
+
+def obtener_hora_ecuador():
+
+    zona_ecuador = timezone(
+        timedelta(hours=-5)
+    )
+
+    return datetime.datetime.now(
+        zona_ecuador
+    )
+
+
+# ==========================================================
+# EJECUTAR APLICACION
 # ==========================================================
 
 if __name__ == '__main__':

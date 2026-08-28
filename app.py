@@ -103,56 +103,57 @@ def cambiar_credenciales():
         return redirect(url_for('panel_medico'))
     return render_template('cambiar_credenciales.html')
 
-@app.route('/api/datos', methods=['POST'])
-def recibir_esp32():
-    """Endpoint para recibir los datos del ESP32 de forma modular."""
-    global ESTADO_HARDWARE
-    data = request.get_json() or {}
-    
-    ESTADO_HARDWARE["conectado"] = True
-    
-    if "temperatura" in data:
-        ESTADO_HARDWARE["temperatura"] = float(data["temperatura"])
-    if "ritmo_cardiaco" in data:
-        ESTADO_HARDWARE["ritmo_cardiaco"] = int(data["ritmo_cardiaco"])
-    if "actividad" in data:
-        ESTADO_HARDWARE["actividad"] = data["actividad"]
-        
-    ESTADO_HARDWARE["ultima_actualizacion"] = datetime.datetime.now().strftime("%H:%M:%S")
-    return jsonify({"status": "success", "mensaje": "Datos recibidos con éxito"}), 200
-
-# Variable temporal exclusiva para la prueba de pulso
-estado_prueba_pulso = {
-    "ritmo_cardiaco": 0  # Valor inicial de prueba
+# Estructura ampliada para guardar tanto pulso como acelerómetro
+estado_telemetria_actual = {
+    "ritmo_cardiaco": 0,
+    "temperatura": 38.0,
+    "acx": 0,
+    "acy": 0,
+    "acz": 0,
+    "pechera_puesta": True
 }
 
 @app.route('/api/actualizar_telemetria', methods=['POST'])
 def actualizar_telemetria():
-    global estado_prueba_pulso
+    global estado_telemetria_actual
     data = request.get_json()
-    if data and "ritmo_cardiaco" in data:
-        estado_prueba_pulso["ritmo_cardiaco"] = int(data["ritmo_cardiaco"])
-        return jsonify({"status": "success"}), 200
-    return jsonify({"status": "error"}), 400
+    if not data:
+        return jsonify({"status": "error", "mensaje": "JSON vacío"}), 400
+    
+    # Capturar opcionalmente ritmo cardíaco si se envía
+    if "ritmo_cardiaco" in data:
+        estado_telemetria_actual["ritmo_cardiaco"] = int(data["ritmo_cardiaco"])
+    
+    # Capturar ejes del MPU6050
+    if "acx" in data:
+        estado_telemetria_actual["acx"] = int(data["acx"])
+    if "acy" in data:
+        estado_telemetria_actual["acy"] = int(data["acy"])
+    if "acz" in data:
+        estado_telemetria_actual["acz"] = int(data["acz"])
+        
+    estado_telemetria_actual["pechera_puesta"] = True
+    return jsonify({"status": "success"}), 200
 
 @app.route('/api/telemetria', methods=['GET'])
 @login_required
 def api_telemetria():
-    global estado_prueba_pulso
-    bpm = estado_prueba_pulso["ritmo_cardiaco"]
+    global estado_telemetria_actual
     ahora = obtener_hora_ecuador()
-    diag = evaluar_estado_clinico(38.0, bpm, True)
+    diag = evaluar_estado_clinico(estado_telemetria_actual["temperatura"], estado_telemetria_actual["ritmo_cardiaco"], True)
     
     return jsonify({
-        "temperatura": 38.0,
-        "ritmo_cardiaco": bpm,
-        "pechera_puesta": True,
-        "actividad": {"estado": "Prueba de Pulso"},
+        "temperatura": estado_telemetria_actual["temperatura"],
+        "ritmo_cardiaco": estado_telemetria_actual["ritmo_cardiaco"],
+        "acx": estado_telemetria_actual["acx"],
+        "acy": estado_telemetria_actual["acy"],
+        "acz": estado_telemetria_actual["acz"],
+        "pechera_puesta": estado_telemetria_actual["pechera_puesta"],
+        "actividad": {"estado": "Monitoreo MPU6050 Activo"},
         "ultima_actualizacion": ahora.strftime("%H:%M:%S"),
         "diagnostico": diag,
         "gps": {"valido": False, "latitud": -1.3458, "longitud": -80.4285}
     })
-
 @app.route('/api/guardar_dosis', methods=['POST'])
 def guardar_dosis():
     global PROXIMO_ID_DOSIS

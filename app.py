@@ -1,6 +1,7 @@
 
 import os
 import datetime
+import time
 
 from datetime import timezone, timedelta
 from functools import wraps
@@ -31,13 +32,22 @@ app.secret_key = os.environ.get(
 
 
 # ==========================================================
+# ZONA HORARIA ECUADOR
+# ==========================================================
+
+ZONA_HORARIA_ECUADOR = timezone(
+    timedelta(hours=-5)
+)
+
+
+# ==========================================================
 # CREDENCIALES
 # ==========================================================
 
 DATOS_USUARIO = {
-    "usuario": "",
-    "clave": "",
-    "fecha_cambio": None
+    "usuario": None,
+    "clave": None,
+    "fecha_ultimo_cambio": None
 }
 
 
@@ -73,8 +83,18 @@ estado_telemetria_actual = {
 
     "conectado": False,
 
-    "ultima_actualizacion": "---"
+    "ultima_actualizacion": "---",
+
+    # Momento de la última recepción
+    "ultimo_envio": 0
 }
+
+
+# ==========================================================
+# TIEMPO MÁXIMO SIN DATOS
+# ==========================================================
+
+TIEMPO_SIN_DATOS = 20
 
 
 # ==========================================================
@@ -83,43 +103,44 @@ estado_telemetria_actual = {
 
 def obtener_hora_ecuador():
 
-    zona_ecuador = timezone(
-        timedelta(hours=-5)
-    )
-
     return datetime.datetime.now(
-        zona_ecuador
+        ZONA_HORARIA_ECUADOR
     )
 
 
 # ==========================================================
-# CAMBIO DE CONTRASEÑA
+# CAMBIO DE CLAVE
 # ==========================================================
 
 def requiere_cambio_clave():
 
-    fecha_cambio = DATOS_USUARIO.get(
-        "fecha_cambio"
+    fecha = DATOS_USUARIO.get(
+        "fecha_ultimo_cambio"
     )
 
-    if not fecha_cambio:
+    if not fecha:
         return False
 
-    ahora = obtener_hora_ecuador()
+    hoy = obtener_hora_ecuador().date()
 
-    diferencia = ahora - fecha_cambio
+    dias_transcurridos = (
+        hoy - fecha
+    ).days
 
-    return diferencia.days >= 30
+    return dias_transcurridos >= 30
 
 
 # ==========================================================
-# PROTECCIÓN DE RUTAS
+# LOGIN REQUIRED
 # ==========================================================
 
 def login_required(f):
 
     @wraps(f)
-    def decorated_function(*args, **kwargs):
+    def decorated_function(
+        *args,
+        **kwargs
+    ):
 
         if not session.get(
             "usuario_autenticado"
@@ -129,13 +150,81 @@ def login_required(f):
                 url_for("login")
             )
 
-        return f(*args, **kwargs)
+        return f(
+            *args,
+            **kwargs
+        )
 
     return decorated_function
 
 
 # ==========================================================
-# DIAGNÓSTICO
+# REINICIAR TELEMETRÍA
+# ==========================================================
+
+def reiniciar_telemetria():
+
+    estado_telemetria_actual[
+        "ritmo_cardiaco"
+    ] = 0
+
+    estado_telemetria_actual[
+        "temperatura"
+    ] = 0.0
+
+    estado_telemetria_actual[
+        "acx"
+    ] = 0.0
+
+    estado_telemetria_actual[
+        "acy"
+    ] = 0.0
+
+    estado_telemetria_actual[
+        "acz"
+    ] = 0.0
+
+    estado_telemetria_actual[
+        "actividad"
+    ] = {
+        "estado": "En espera de sensor",
+        "icono": "⏳"
+    }
+
+    estado_telemetria_actual[
+        "conectado"
+    ] = False
+
+    estado_telemetria_actual[
+        "ultima_actualizacion"
+    ] = "---"
+
+
+# ==========================================================
+# VERIFICAR TIEMPO SIN DATOS
+# ==========================================================
+
+def verificar_telemetria():
+
+    ultimo_envio = estado_telemetria_actual.get(
+        "ultimo_envio",
+        0
+    )
+
+    if ultimo_envio == 0:
+        return
+
+    segundos_sin_datos = (
+        time.time() - ultimo_envio
+    )
+
+    if segundos_sin_datos >= TIEMPO_SIN_DATOS:
+
+        reiniciar_telemetria()
+
+
+# ==========================================================
+# DIAGNÓSTICO CLÍNICO
 # ==========================================================
 
 def evaluar_estado_clinico(
@@ -143,61 +232,43 @@ def evaluar_estado_clinico(
     bpm
 ):
 
-    # Como todavía no existe sensor de temperatura,
-    # temperatura = 0 NO genera una alerta.
-
+    # Sin datos
     if temp == 0 and bpm == 0:
 
         return {
+
             "salud_mascota":
-                "Sin conexión de sensores",
+                "Sin datos",
 
             "badge_class":
                 "bg-secondary",
 
             "mensaje":
-                "A la espera de datos del ESP32."
+                "Esperando datos del ESP32."
         }
 
 
-    # Ritmo cardíaco alto
-
-    if bpm > 140:
+    # Temperatura y BPM elevados
+    if temp > 39.2 and bpm > 140:
 
         return {
+
             "salud_mascota":
-                "Taquicardia",
+                "Estado Crítico",
 
             "badge_class":
-                "bg-warning text-dark",
+                "bg-danger",
 
             "mensaje":
-                "Frecuencia cardíaca elevada."
+                "Alerta de hipertermia severa "
+                "y taquicardia."
         }
 
 
-    # Ritmo cardíaco bajo
-
-    if 0 < bpm < 60:
+    elif temp > 39.2:
 
         return {
-            "salud_mascota":
-                "Bradicardia",
 
-            "badge_class":
-                "bg-warning text-dark",
-
-            "mensaje":
-                "Frecuencia cardíaca baja."
-        }
-
-
-    # Temperatura solamente se evaluará
-    # cuando exista sensor.
-
-    if temp > 39.2:
-
-        return {
             "salud_mascota":
                 "Fiebre Detectada",
 
@@ -209,16 +280,68 @@ def evaluar_estado_clinico(
         }
 
 
-    return {
-        "salud_mascota":
-            "Estado Normal",
+    # Temperatura baja
+    elif temp > 0 and temp < 37.5:
 
-        "badge_class":
-            "bg-success",
+        return {
 
-        "mensaje":
-            "Constantes disponibles dentro de rangos normales."
-    }
+            "salud_mascota":
+                "Temperatura Baja",
+
+            "badge_class":
+                "bg-warning text-dark",
+
+            "mensaje":
+                "Temperatura corporal por "
+                "debajo del rango establecido."
+        }
+
+
+    # BPM alto
+    elif bpm > 140:
+
+        return {
+
+            "salud_mascota":
+                "Taquicardia",
+
+            "badge_class":
+                "bg-warning text-dark",
+
+            "mensaje":
+                "Frecuencia cardíaca elevada."
+        }
+
+
+    # BPM bajo
+    elif bpm > 0 and bpm < 60:
+
+        return {
+
+            "salud_mascota":
+                "Bradicardia",
+
+            "badge_class":
+                "bg-warning text-dark",
+
+            "mensaje":
+                "Frecuencia cardíaca baja."
+        }
+
+
+    else:
+
+        return {
+
+            "salud_mascota":
+                "Estado Normal",
+
+            "badge_class":
+                "bg-success",
+
+            "mensaje":
+                "Constantes vitales estables."
+        }
 
 
 # ==========================================================
@@ -228,8 +351,8 @@ def evaluar_estado_clinico(
 @app.route("/")
 def inicio():
 
-    return redirect(
-        url_for("login")
+    return render_template(
+        "logotipo.html"
     )
 
 
@@ -252,6 +375,15 @@ def login():
         )
 
 
+    if session.get(
+        "usuario_autenticado"
+    ):
+
+        return redirect(
+            url_for("panel_medico")
+        )
+
+
     if request.method == "POST":
 
         usuario_ingresado = request.form.get(
@@ -260,15 +392,25 @@ def login():
         ).strip()
 
         clave_ingresada = request.form.get(
-            "password",
-            ""
-        ).strip()
+            "password"
+        )
+
+        if clave_ingresada is None:
+
+            clave_ingresada = request.form.get(
+                "clave",
+                ""
+            )
+
+        clave_ingresada = clave_ingresada.strip()
 
 
         if (
             usuario_ingresado
             == DATOS_USUARIO["usuario"]
+
             and
+
             clave_ingresada
             == DATOS_USUARIO["clave"]
         ):
@@ -298,9 +440,7 @@ def login():
 
 
             return redirect(
-                url_for(
-                    "panel_dueno"
-                )
+                url_for("panel_medico")
             )
 
 
@@ -373,8 +513,8 @@ def cambiar_credenciales():
         ] = nueva_clave
 
         DATOS_USUARIO[
-            "fecha_cambio"
-        ] = obtener_hora_ecuador()
+            "fecha_ultimo_cambio"
+        ] = obtener_hora_ecuador().date()
 
 
         session[
@@ -387,33 +527,18 @@ def cambiar_credenciales():
 
 
         flash(
-            "Credenciales guardadas correctamente.",
+            "Credenciales guardadas exitosamente.",
             "success"
         )
 
 
         return redirect(
-            url_for(
-                "panel_dueno"
-            )
+            url_for("panel_medico")
         )
 
 
     return render_template(
         "cambiar_credenciales.html"
-    )
-
-
-# ==========================================================
-# PANEL DEL DUEÑO
-# ==========================================================
-
-@app.route("/dueno")
-@login_required
-def panel_dueno():
-
-    return render_template(
-        "dueno.html"
     )
 
 
@@ -452,18 +577,19 @@ def actualizar_telemetria():
         if not data:
 
             return jsonify({
-                "status": "error",
+
+                "status":
+                    "error",
+
                 "mensaje":
                     "JSON vacío o inválido"
+
             }), 400
 
 
         # ==================================================
         # TEMPERATURA
         # ==================================================
-
-        # Por ahora siempre se recibe 0.0
-        # hasta instalar el sensor.
 
         if "temperatura" in data:
 
@@ -490,7 +616,7 @@ def actualizar_telemetria():
 
 
         # ==================================================
-        # ACELERÓMETRO
+        # ACELERÓMETRO X
         # ==================================================
 
         if "acx" in data:
@@ -502,6 +628,10 @@ def actualizar_telemetria():
             )
 
 
+        # ==================================================
+        # ACELERÓMETRO Y
+        # ==================================================
+
         if "acy" in data:
 
             estado_telemetria_actual[
@@ -510,6 +640,10 @@ def actualizar_telemetria():
                 data["acy"]
             )
 
+
+        # ==================================================
+        # ACELERÓMETRO Z
+        # ==================================================
 
         if "acz" in data:
 
@@ -553,10 +687,11 @@ def actualizar_telemetria():
             "actividad"
         ] = {
 
-            "estado": actividad,
+            "estado":
+                actividad,
 
-            "icono": icono
-
+            "icono":
+                icono
         }
 
 
@@ -567,6 +702,15 @@ def actualizar_telemetria():
         estado_telemetria_actual[
             "conectado"
         ] = True
+
+
+        # ==================================================
+        # REGISTRAR ÚLTIMO ENVÍO
+        # ==================================================
+
+        estado_telemetria_actual[
+            "ultimo_envio"
+        ] = time.time()
 
 
         estado_telemetria_actual[
@@ -628,7 +772,7 @@ def actualizar_telemetria():
         )
 
         print(
-            "Hora:",
+            "Último envío:",
             estado_telemetria_actual[
                 "ultima_actualizacion"
             ]
@@ -639,7 +783,7 @@ def actualizar_telemetria():
 
 
         # ==================================================
-        # RESPUESTA AL ESP32
+        # RESPUESTA ESP32
         # ==================================================
 
         return jsonify({
@@ -712,7 +856,7 @@ def actualizar_telemetria():
 
 
 # ==========================================================
-# CONSULTAR TELEMETRÍA
+# ENVIAR TELEMETRÍA AL MÉDICO
 # ==========================================================
 
 @app.route(
@@ -722,12 +866,16 @@ def actualizar_telemetria():
 @login_required
 def api_telemetria():
 
-    temperatura = estado_telemetria_actual.get(
+    # Verificar si han pasado 20 segundos
+    verificar_telemetria()
+
+
+    temp = estado_telemetria_actual.get(
         "temperatura",
         0.0
     )
 
-    ritmo_cardiaco = estado_telemetria_actual.get(
+    bpm = estado_telemetria_actual.get(
         "ritmo_cardiaco",
         0
     )
@@ -757,18 +905,18 @@ def api_telemetria():
 
 
     diagnostico = evaluar_estado_clinico(
-        temperatura,
-        ritmo_cardiaco
+        temp,
+        bpm
     )
 
 
     return jsonify({
 
         "temperatura":
-            temperatura,
+            temp,
 
         "ritmo_cardiaco":
-            ritmo_cardiaco,
+            bpm,
 
         "actividad":
             actividad,
@@ -848,27 +996,39 @@ def guardar_dosis():
         if peso <= 0:
 
             return jsonify({
-                "status": "error",
+
+                "status":
+                    "error",
+
                 "mensaje":
                     "El peso debe ser mayor que 0."
+
             }), 400
 
 
         if dosis_mg_kg <= 0:
 
             return jsonify({
-                "status": "error",
+
+                "status":
+                    "error",
+
                 "mensaje":
                     "La dosis debe ser mayor que 0."
+
             }), 400
 
 
         if concentracion <= 0:
 
             return jsonify({
-                "status": "error",
+
+                "status":
+                    "error",
+
                 "mensaje":
                     "La concentración debe ser mayor que 0."
+
             }), 400
 
 
@@ -987,6 +1147,27 @@ def guardar_dosis():
         }), 400
 
 
+    except Exception as e:
+
+        print(
+            "ERROR GUARDANDO DOSIS:",
+            str(e)
+        )
+
+        return jsonify({
+
+            "status":
+                "error",
+
+            "mensaje":
+                "Error interno al guardar la dosis.",
+
+            "detalle":
+                str(e)
+
+        }), 500
+
+
 # ==========================================================
 # HISTORIAL DE DOSIS
 # ==========================================================
@@ -1012,11 +1193,10 @@ def obtener_historial_dosis():
     methods=["DELETE"]
 )
 @login_required
-def eliminar_dosis(
-    id_dosis
-):
+def eliminar_dosis(id_dosis):
 
     global HISTORIAL_DOSIS
+
 
     cantidad_antes = len(
         HISTORIAL_DOSIS
@@ -1030,7 +1210,6 @@ def eliminar_dosis(
         for item in HISTORIAL_DOSIS
 
         if item["id"] != id_dosis
-
     ]
 
 
@@ -1106,3 +1285,4 @@ if __name__ == "__main__":
         host="0.0.0.0",
         port=port
     )
+

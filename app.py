@@ -1,4 +1,4 @@
-```python
+
 # ---------------------------------------------------------
 # DASHBOARD DEL DUEÑO
 # ---------------------------------------------------------
@@ -42,4 +42,4 @@ def dueno():
         mascotas=mascotas,
         telemetria=estado_telemetria_actual
     )
-```
+

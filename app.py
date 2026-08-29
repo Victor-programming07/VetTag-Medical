@@ -380,7 +380,7 @@ def login():
     ):
 
         return redirect(
-            url_for("panel_medico")
+            url_for("panel_dueno")
         )
 
 
@@ -440,7 +440,7 @@ def login():
 
 
             return redirect(
-                url_for("panel_medico")
+                url_for("panel_duenoo")
             )
 
 
@@ -546,12 +546,12 @@ def cambiar_credenciales():
 # PANEL MÉDICO
 # ==========================================================
 
-@app.route("/medico")
+@app.route("/dueno")
 @login_required
-def panel_medico():
+def panel_dueno():
 
     return render_template(
-        "medico.html"
+        "dueno.html"
     )
 
 

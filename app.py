@@ -189,7 +189,6 @@ def login():
 
         session["usuario_autenticado"] = True
 
-        return redirect(url_for("panel_medico"))
 
     return render_template("login.html")
 
@@ -205,15 +204,7 @@ def panel_dueno():
     return render_template("dueno.html")
 
 
-# ==========================================================
-# PANEL DEL MÉDICO
-# ==========================================================
 
-@app.route("/medico")
-@login_required
-def panel_medico():
-
-    return render_template("medico.html")
 
 
 # ==========================================================

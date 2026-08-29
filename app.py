@@ -92,6 +92,46 @@ def obtener_hora_ecuador():
         zona_ecuador
     )
 
+def verificar_desconexion():
+    global estado_telemetria_actual
+
+    ultima = estado_telemetria_actual.get("ultima_actualizacion")
+
+    if not ultima or ultima == "---":
+        return
+
+    try:
+        hora_ultima = datetime.datetime.strptime(
+            ultima,
+            "%H:%M:%S"
+        ).time()
+
+        ahora = obtener_hora_ecuador()
+
+        ultima_datetime = datetime.datetime.combine(
+            ahora.date(),
+            hora_ultima
+        ).replace(tzinfo=ahora.tzinfo)
+
+        segundos = (ahora - ultima_datetime).total_seconds()
+
+        if segundos > 10:
+            estado_telemetria_actual["ritmo_cardiaco"] = 0
+            estado_telemetria_actual["temperatura"] = 0.0
+            estado_telemetria_actual["acx"] = 0.0
+            estado_telemetria_actual["acy"] = 0.0
+            estado_telemetria_actual["acz"] = 0.0
+
+            estado_telemetria_actual["actividad"] = {
+                "estado": "En espera de sensor",
+                "icono": "⏳"
+            }
+
+            estado_telemetria_actual["conectado"] = False
+
+    except Exception as e:
+        print("ERROR VERIFICANDO DESCONEXIÓN:", e)
+
 
 # ==========================================================
 # CAMBIO DE CONTRASEÑA
@@ -722,6 +762,8 @@ def actualizar_telemetria():
 )
 @login_required
 def api_telemetria():
+
+    verificar_desconexion()
 
     temperatura = estado_telemetria_actual.get(
         "temperatura",

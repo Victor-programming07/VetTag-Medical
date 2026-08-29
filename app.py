@@ -114,18 +114,7 @@ def requiere_cambio_clave():
 # DIAGNÓSTICO CLÍNICO
 # ==========================================================
 
-def evaluar_estado_clinico(temp, bpm, arnes_puesto):
-
-    if not arnes_puesto:
-
-        return {
-            "salud_mascota": "Arnés Desconectado",
-            "badge_class": "bg-danger",
-            "mensaje": (
-                "El arnés no detecta contacto. "
-                "Verifique la sujeción del dispositivo."
-            )
-        }
+def evaluar_estado_clinico(temp, bpm):
 
     if temp > 39.2 and bpm > 140:
 
@@ -712,7 +701,6 @@ def api_telemetria():
     diagnostico = evaluar_estado_clinico(
         temperatura,
         ritmo_cardiaco,
-        pechera
     )
 
 

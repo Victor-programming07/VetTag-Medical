@@ -205,117 +205,32 @@ def inicio():
 # LOGIN
 # ==========================================================
 
-@app.route(
-    "/login",
-    methods=["GET", "POST"]
-)
+@app.route("/login", methods=["GET", "POST"])
 def login():
-
-    # ------------------------------------------------------
-    # SI NO EXISTE USUARIO
-    # ------------------------------------------------------
-
-    if not DATOS_USUARIO.get("usuario"):
-
-        return render_template(
-            "login.html",
-            modo="registro"
-        )
-
-
-    # ------------------------------------------------------
-    # PROCESAR LOGIN
-    # ------------------------------------------------------
 
     if request.method == "POST":
 
-        accion = request.form.get(
-            "accion",
-            "login"
-        )
+        usuario = request.form.get("usuario", "").strip()
+        password = request.form.get("password", "").strip()
 
-        usuario_ingresado = request.form.get(
-            "usuario",
-            ""
-        ).strip()
+        if usuario == "admin" and password == "1234":
 
-        # IMPORTANTE:
-        # Tu login.html utiliza name="password"
-        password_ingresada = request.form.get(
-            "password",
-            ""
-        ).strip()
+            session["usuario_autenticado"] = True
+            session["usuario"] = usuario
 
+            return redirect(url_for("panel_medico"))
 
-        # --------------------------------------------------
-        # LOGIN NORMAL
-        # --------------------------------------------------
+        else:
 
-        if accion == "login":
-
-            if (
-                usuario_ingresado
-                == DATOS_USUARIO.get("usuario")
-                and
-                password_ingresada
-                == DATOS_USUARIO.get("clave")
-            ):
-
-                session["usuario_autenticado"] = True
-
-                session["usuario"] = (
-                    usuario_ingresado
-                )
-
-
-                # ------------------------------------------
-                # COMPROBAR CONTRASEÑA
-                # ------------------------------------------
-
-                if requiere_cambio_clave():
-
-                    flash(
-                        "Han transcurrido 30 días. "
-                        "Por seguridad actualice sus datos.",
-                        "warning"
-                    )
-
-                    return redirect(
-                        url_for(
-                            "cambiar_credenciales"
-                        )
-                    )
-
-
-                return redirect(
-                    url_for(
-                        "panel_medico"
-                    )
-                )
-
-
-            else:
-
-                flash(
-                    "Credenciales incorrectas.",
-                    "danger"
-                )
-
-
-    # ------------------------------------------------------
-    # MOSTRAR LOGIN
-    # ------------------------------------------------------
+            flash(
+                "Credenciales incorrectas.",
+                "danger"
+            )
 
     return render_template(
         "login.html",
         modo="login"
     )
-
-
-# ==========================================================
-# PANEL MÉDICO
-# ==========================================================
-
 @app.route("/medico")
 @login_required
 def panel_medico():

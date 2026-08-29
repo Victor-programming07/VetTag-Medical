@@ -1,4 +1,5 @@
 
+```python
 import datetime
 from datetime import timezone, timedelta
 from functools import wraps
@@ -26,7 +27,7 @@ app.secret_key = "vettag_telemetry_secure_key"
 
 
 # ==========================================================
-# CREDENCIALES
+# DATOS DEL USUARIO
 # ==========================================================
 
 DATOS_USUARIO = {
@@ -36,18 +37,21 @@ DATOS_USUARIO = {
 }
 
 
+# ==========================================================
+# COMPROBAR SI LA CONTRASEÑA TIENE MÁS DE 30 DÍAS
+# ==========================================================
+
 def requiere_cambio_clave():
-    """
-    Comprueba si han pasado 30 días desde el último
-    cambio de credenciales.
-    """
 
     fecha_cambio = DATOS_USUARIO.get("fecha_cambio")
 
     if not fecha_cambio:
         return False
 
-    diferencia = datetime.datetime.now() - fecha_cambio
+    diferencia = (
+        datetime.datetime.now()
+        - fecha_cambio
+    )
 
     return diferencia.days >= 30
 
@@ -101,9 +105,8 @@ def evaluar_estado_clinico(temp, bpm):
         return {
             "salud_mascota": "Sin Conexión de Sensores",
             "badge_class": "bg-secondary",
-            "mensaje": (
+            "mensaje":
                 "A la espera de datos físicos desde el ESP32."
-            )
         }
 
     elif temp > 39.2 and bpm > 140:
@@ -111,10 +114,9 @@ def evaluar_estado_clinico(temp, bpm):
         return {
             "salud_mascota": "Estado Crítico",
             "badge_class": "bg-danger",
-            "mensaje": (
+            "mensaje":
                 "Alerta de hipertermia severa y taquicardia. "
                 "Requiere intervención médica inmediata."
-            )
         }
 
     elif temp > 39.2:
@@ -122,10 +124,9 @@ def evaluar_estado_clinico(temp, bpm):
         return {
             "salud_mascota": "Fiebre Detectada",
             "badge_class": "bg-warning text-dark",
-            "mensaje": (
+            "mensaje":
                 "Temperatura corporal elevada por encima "
                 "del rango normal (37.5°C - 39.2°C)."
-            )
         }
 
     elif 0 < temp < 37.5:
@@ -133,10 +134,9 @@ def evaluar_estado_clinico(temp, bpm):
         return {
             "salud_mascota": "Hipotermia Detectada",
             "badge_class": "bg-warning text-dark",
-            "mensaje": (
+            "mensaje":
                 "Temperatura corporal por debajo del límite "
                 "seguro. Mantener al paciente abrigado."
-            )
         }
 
     elif bpm > 140:
@@ -144,10 +144,9 @@ def evaluar_estado_clinico(temp, bpm):
         return {
             "salud_mascota": "Taquicardia",
             "badge_class": "bg-warning text-dark",
-            "mensaje": (
+            "mensaje":
                 "Frecuencia cardíaca acelerada por encima "
                 "de los valores basales en reposo."
-            )
         }
 
     elif 0 < bpm < 60:
@@ -155,10 +154,9 @@ def evaluar_estado_clinico(temp, bpm):
         return {
             "salud_mascota": "Bradicardia",
             "badge_class": "bg-warning text-dark",
-            "mensaje": (
+            "mensaje":
                 "Frecuencia cardíaca anormalmente baja. "
                 "Se sugiere monitoreo del pulso."
-            )
         }
 
     else:
@@ -166,10 +164,9 @@ def evaluar_estado_clinico(temp, bpm):
         return {
             "salud_mascota": "Estado Normal",
             "badge_class": "bg-success",
-            "mensaje": (
+            "mensaje":
                 "Constantes vitales dentro de rangos "
                 "fisiológicos estables."
-            )
         }
 
 
@@ -184,7 +181,9 @@ def login_required(f):
 
         if not session.get("usuario_autenticado"):
 
-            return redirect(url_for("login"))
+            return redirect(
+                url_for("login")
+            )
 
         return f(*args, **kwargs)
 
@@ -192,90 +191,125 @@ def login_required(f):
 
 
 # ==========================================================
-# PÁGINA DE INICIO
+# INICIO
 # ==========================================================
 
 @app.route("/")
 def inicio():
 
-    return render_template("logotipo.html")
+    return render_template(
+        "logotipo.html"
+    )
 
 
 # ==========================================================
 # LOGIN
 # ==========================================================
 
-@app.route("/login", methods=["GET", "POST"])
+@app.route(
+    "/login",
+    methods=["GET", "POST"]
+)
 def login():
 
-    if not DATOS_USUARIO["usuario"]:
+    # ------------------------------------------------------
+    # SI NO EXISTE USUARIO
+    # ------------------------------------------------------
 
-        return redirect(
-            url_for("cambiar_credenciales")
+    if not DATOS_USUARIO.get("usuario"):
+
+        return render_template(
+            "login.html",
+            modo="registro"
         )
 
+
+    # ------------------------------------------------------
+    # PROCESAR LOGIN
+    # ------------------------------------------------------
+
     if request.method == "POST":
+
+        accion = request.form.get(
+            "accion",
+            "login"
+        )
 
         usuario_ingresado = request.form.get(
             "usuario",
             ""
         ).strip()
 
-        clave_ingresada = request.form.get(
-            "clave",
+        # IMPORTANTE:
+        # Tu login.html utiliza name="password"
+        password_ingresada = request.form.get(
+            "password",
             ""
         ).strip()
 
 
         # --------------------------------------------------
-        # COMPROBAR CREDENCIALES
+        # LOGIN NORMAL
         # --------------------------------------------------
 
-        if (
-            usuario_ingresado
-            == DATOS_USUARIO["usuario"]
-            and
-            clave_ingresada
-            == DATOS_USUARIO["clave"]
-        ):
+        if accion == "login":
 
-            session["usuario_autenticado"] = True
+            if (
+                usuario_ingresado
+                == DATOS_USUARIO.get("usuario")
+                and
+                password_ingresada
+                == DATOS_USUARIO.get("clave")
+            ):
 
-            session["usuario"] = usuario_ingresado
+                session["usuario_autenticado"] = True
 
-
-            # --------------------------------------------------
-            # COMPROBAR CAMBIO DE CLAVE
-            # --------------------------------------------------
-
-            if requiere_cambio_clave():
-
-                flash(
-                    "Han transcurrido 30 días. "
-                    "Por seguridad actualice sus datos.",
-                    "warning"
+                session["usuario"] = (
+                    usuario_ingresado
                 )
+
+
+                # ------------------------------------------
+                # COMPROBAR CONTRASEÑA
+                # ------------------------------------------
+
+                if requiere_cambio_clave():
+
+                    flash(
+                        "Han transcurrido 30 días. "
+                        "Por seguridad actualice sus datos.",
+                        "warning"
+                    )
+
+                    return redirect(
+                        url_for(
+                            "cambiar_credenciales"
+                        )
+                    )
+
 
                 return redirect(
-                    url_for("cambiar_credenciales")
+                    url_for(
+                        "panel_medico"
+                    )
                 )
 
 
-            return redirect(
-                url_for("panel_medico")
-            )
+            else:
+
+                flash(
+                    "Credenciales incorrectas.",
+                    "danger"
+                )
 
 
-        else:
-
-            flash(
-                "Credenciales incorrectas.",
-                "danger"
-            )
-
+    # ------------------------------------------------------
+    # MOSTRAR LOGIN
+    # ------------------------------------------------------
 
     return render_template(
-        "login.html"
+        "login.html",
+        modo="login"
     )
 
 
@@ -325,15 +359,34 @@ def cambiar_credenciales():
             ""
         ).strip()
 
-        clave_nueva = request.form.get(
-            "clave",
+        password_nueva = request.form.get(
+            "password",
             ""
         ).strip()
 
-        confirmar_clave = request.form.get(
-            "confirmar_clave",
+        confirmar_password = request.form.get(
+            "confirmar_password",
             ""
         ).strip()
+
+
+        # --------------------------------------------------
+        # SI TU HTML UTILIZA OTROS NOMBRES
+        # --------------------------------------------------
+
+        if not password_nueva:
+
+            password_nueva = request.form.get(
+                "clave",
+                ""
+            ).strip()
+
+        if not confirmar_password:
+
+            confirmar_password = request.form.get(
+                "confirmar_clave",
+                ""
+            ).strip()
 
 
         # --------------------------------------------------
@@ -342,21 +395,16 @@ def cambiar_credenciales():
 
         if not usuario_nuevo:
 
-            flash(
-                "Debe ingresar un usuario.",
-                "danger"
-            )
-
-            return render_template(
-                "cambiar_credenciales.html"
-            )
+            usuario_nuevo = DATOS_USUARIO[
+                "usuario"
+            ]
 
 
         # --------------------------------------------------
-        # VALIDAR CLAVE
+        # VALIDAR CONTRASEÑA
         # --------------------------------------------------
 
-        if not clave_nueva:
+        if not password_nueva:
 
             flash(
                 "Debe ingresar una contraseña.",
@@ -368,7 +416,11 @@ def cambiar_credenciales():
             )
 
 
-        if clave_nueva != confirmar_clave:
+        if (
+            confirmar_password
+            and
+            password_nueva != confirmar_password
+        ):
 
             flash(
                 "Las contraseñas no coinciden.",
@@ -381,17 +433,27 @@ def cambiar_credenciales():
 
 
         # --------------------------------------------------
-        # ACTUALIZAR CREDENCIALES
+        # GUARDAR NUEVAS CREDENCIALES
         # --------------------------------------------------
 
-        DATOS_USUARIO["usuario"] = usuario_nuevo
+        DATOS_USUARIO["usuario"] = (
+            usuario_nuevo
+        )
 
-        DATOS_USUARIO["clave"] = clave_nueva
+        DATOS_USUARIO["clave"] = (
+            password_nueva
+        )
 
-        DATOS_USUARIO["fecha_cambio"] = datetime.datetime.now()
+        DATOS_USUARIO["fecha_cambio"] = (
+            datetime.datetime.now()
+        )
 
 
-        session["usuario"] = usuario_nuevo
+        session["usuario"] = (
+            usuario_nuevo
+        )
+
+        session["usuario_autenticado"] = True
 
 
         flash(
@@ -401,7 +463,9 @@ def cambiar_credenciales():
 
 
         return redirect(
-            url_for("panel_medico")
+            url_for(
+                "panel_medico"
+            )
         )
 
 
@@ -433,7 +497,8 @@ def actualizar_telemetria():
 
             return jsonify({
 
-                "status": "error",
+                "status":
+                    "error",
 
                 "mensaje":
                     "JSON vacío o inválido"
@@ -555,17 +620,17 @@ def actualizar_telemetria():
 
         if "pechera_puesta" in data:
 
-            valor_pechera = data[
+            valor = data[
                 "pechera_puesta"
             ]
 
             if isinstance(
-                valor_pechera,
+                valor,
                 str
             ):
 
-                valor_pechera = (
-                    valor_pechera.lower()
+                valor = (
+                    valor.lower()
                     in [
                         "true",
                         "1",
@@ -576,13 +641,12 @@ def actualizar_telemetria():
 
             else:
 
-                valor_pechera = bool(
-                    valor_pechera
-                )
+                valor = bool(valor)
+
 
             estado_telemetria_actual[
                 "pechera_puesta"
-            ] = valor_pechera
+            ] = valor
 
         else:
 
@@ -608,11 +672,11 @@ def actualizar_telemetria():
 
 
         # --------------------------------------------------
-        # CONSOLA
+        # MOSTRAR EN CONSOLA
         # --------------------------------------------------
 
         print("\n================================")
-        print("      TELEMETRÍA RECIBIDA")
+        print("       TELEMETRÍA RECIBIDA")
         print("================================")
 
         print(
@@ -665,7 +729,7 @@ def actualizar_telemetria():
         )
 
         print(
-            "Actualización:",
+            "Hora:",
             estado_telemetria_actual[
                 "ultima_actualizacion"
             ]
@@ -703,7 +767,7 @@ def actualizar_telemetria():
     except (ValueError, TypeError) as e:
 
         print(
-            "ERROR EN DATOS:",
+            "ERROR EN LOS DATOS:",
             str(e)
         )
 
@@ -743,7 +807,7 @@ def actualizar_telemetria():
 
 
 # ==========================================================
-# ENVIAR TELEMETRÍA A LA WEB
+# ENVIAR TELEMETRÍA A LA APLICACIÓN
 # ==========================================================
 
 @app.route(
@@ -768,8 +832,11 @@ def api_telemetria():
         "actividad",
 
         {
-            "estado": "En espera de sensor",
-            "icono": "⏳"
+            "estado":
+                "En espera de sensor",
+
+            "icono":
+                "⏳"
         }
     )
 
@@ -783,11 +850,17 @@ def api_telemetria():
         False
     )
 
-    ultima_actualizacion = estado_telemetria_actual.get(
-        "ultima_actualizacion",
-        "---"
+    ultima_actualizacion = (
+        estado_telemetria_actual.get(
+            "ultima_actualizacion",
+            "---"
+        )
     )
 
+
+    # ------------------------------------------------------
+    # DIAGNÓSTICO
+    # ------------------------------------------------------
 
     diagnostico = evaluar_estado_clinico(
 
@@ -796,6 +869,10 @@ def api_telemetria():
         ritmo_cardiaco
     )
 
+
+    # ------------------------------------------------------
+    # RESPUESTA
+    # ------------------------------------------------------
 
     return jsonify({
 
@@ -864,21 +941,21 @@ def guardar_dosis():
         peso = float(
             data.get(
                 "peso",
-                0.0
+                0
             )
         )
 
         dosis_mg_kg = float(
             data.get(
                 "dosis_mg_kg",
-                0.0
+                0
             )
         )
 
         concentracion = float(
             data.get(
                 "concentracion",
-                1.0
+                0
             )
         )
 
@@ -922,6 +999,10 @@ def guardar_dosis():
             }), 400
 
 
+        # --------------------------------------------------
+        # CÁLCULO DEL VOLUMEN
+        # --------------------------------------------------
+
         volumen_ml = round(
 
             (
@@ -934,6 +1015,10 @@ def guardar_dosis():
             2
         )
 
+
+        # --------------------------------------------------
+        # REGISTRO
+        # --------------------------------------------------
 
         nuevo_registro = {
 
@@ -1054,7 +1139,7 @@ def guardar_dosis():
                 "error",
 
             "mensaje":
-                "Error interno al guardar la dosis.",
+                "Error interno del servidor.",
 
             "detalle":
                 str(e)
@@ -1164,7 +1249,7 @@ def serve_manifest():
 
 
 # ==========================================================
-# HORA ECUADOR
+# HORA DE ECUADOR
 # ==========================================================
 
 def obtener_hora_ecuador():
@@ -1192,4 +1277,4 @@ if __name__ == "__main__":
 
         port=5000
     )
-
+```

@@ -24,15 +24,15 @@ from flask import (
 
 app = Flask(__name__)
 
-app.secret_key = "vettag_telemetry_secure_key"
+app.secret_key = os.environ.get(
+    "SECRET_KEY",
+    "vettag_telemetry_secure_key"
+)
 
 
 # ==========================================================
-# CREDENCIALES DEL SISTEMA
+# CREDENCIALES
 # ==========================================================
-
-# Se guardan mientras el servidor esté funcionando.
-# NO hay usuario ni contraseña fija.
 
 DATOS_USUARIO = {
     "usuario": "",
@@ -51,7 +51,7 @@ PROXIMO_ID_DOSIS = 1
 
 
 # ==========================================================
-# ESTADO DE TELEMETRÍA
+# ESTADO ACTUAL DE TELEMETRÍA
 # ==========================================================
 
 estado_telemetria_actual = {
@@ -71,8 +71,6 @@ estado_telemetria_actual = {
         "icono": "⏳"
     },
 
-    "pechera_puesta": False,
-
     "conectado": False,
 
     "ultima_actualizacion": "---"
@@ -89,16 +87,20 @@ def obtener_hora_ecuador():
         timedelta(hours=-5)
     )
 
-    return datetime.datetime.now(zona_ecuador)
+    return datetime.datetime.now(
+        zona_ecuador
+    )
 
 
 # ==========================================================
-# VERIFICAR SI LA CONTRASEÑA NECESITA CAMBIO
+# CAMBIO DE CONTRASEÑA
 # ==========================================================
 
 def requiere_cambio_clave():
 
-    fecha_cambio = DATOS_USUARIO.get("fecha_cambio")
+    fecha_cambio = DATOS_USUARIO.get(
+        "fecha_cambio"
+    )
 
     if not fecha_cambio:
         return False
@@ -111,87 +113,6 @@ def requiere_cambio_clave():
 
 
 # ==========================================================
-# DIAGNÓSTICO CLÍNICO
-# ==========================================================
-
-def evaluar_estado_clinico(temp, bpm):
-
-    if temp > 39.2 and bpm > 140:
-
-        return {
-            "salud_mascota": "Estado Crítico",
-            "badge_class": "bg-danger",
-            "mensaje": (
-                "Alerta de hipertermia severa y taquicardia. "
-                "Requiere intervención médica inmediata."
-            )
-        }
-
-    elif temp > 39.2:
-
-        return {
-            "salud_mascota": "Fiebre Detectada",
-            "badge_class": "bg-warning text-dark",
-            "mensaje": (
-                "Temperatura corporal elevada por encima "
-                "del rango normal."
-            )
-        }
-
-    elif 0 < temp < 37.5:
-
-        return {
-            "salud_mascota": "Hipotermia Detectada",
-            "badge_class": "bg-warning text-dark",
-            "mensaje": (
-                "Temperatura corporal por debajo del límite "
-                "seguro."
-            )
-        }
-
-    elif bpm > 140:
-
-        return {
-            "salud_mascota": "Taquicardia",
-            "badge_class": "bg-warning text-dark",
-            "mensaje": (
-                "Frecuencia cardíaca elevada."
-            )
-        }
-
-    elif 0 < bpm < 60:
-
-        return {
-            "salud_mascota": "Bradicardia",
-            "badge_class": "bg-warning text-dark",
-            "mensaje": (
-                "Frecuencia cardíaca anormalmente baja."
-            )
-        }
-
-    elif temp == 0 and bpm == 0:
-
-        return {
-            "salud_mascota": "Sin Conexión de Sensores",
-            "badge_class": "bg-secondary",
-            "mensaje": (
-                "A la espera de datos físicos desde el ESP32."
-            )
-        }
-
-    else:
-
-        return {
-            "salud_mascota": "Estado Normal",
-            "badge_class": "bg-success",
-            "mensaje": (
-                "Constantes vitales dentro de rangos "
-                "fisiológicos estables."
-            )
-        }
-
-
-# ==========================================================
 # PROTECCIÓN DE RUTAS
 # ==========================================================
 
@@ -200,7 +121,9 @@ def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
 
-        if not session.get("usuario_autenticado"):
+        if not session.get(
+            "usuario_autenticado"
+        ):
 
             return redirect(
                 url_for("login")
@@ -209,6 +132,93 @@ def login_required(f):
         return f(*args, **kwargs)
 
     return decorated_function
+
+
+# ==========================================================
+# DIAGNÓSTICO
+# ==========================================================
+
+def evaluar_estado_clinico(
+    temp,
+    bpm
+):
+
+    # Como todavía no existe sensor de temperatura,
+    # temperatura = 0 NO genera una alerta.
+
+    if temp == 0 and bpm == 0:
+
+        return {
+            "salud_mascota":
+                "Sin conexión de sensores",
+
+            "badge_class":
+                "bg-secondary",
+
+            "mensaje":
+                "A la espera de datos del ESP32."
+        }
+
+
+    # Ritmo cardíaco alto
+
+    if bpm > 140:
+
+        return {
+            "salud_mascota":
+                "Taquicardia",
+
+            "badge_class":
+                "bg-warning text-dark",
+
+            "mensaje":
+                "Frecuencia cardíaca elevada."
+        }
+
+
+    # Ritmo cardíaco bajo
+
+    if 0 < bpm < 60:
+
+        return {
+            "salud_mascota":
+                "Bradicardia",
+
+            "badge_class":
+                "bg-warning text-dark",
+
+            "mensaje":
+                "Frecuencia cardíaca baja."
+        }
+
+
+    # Temperatura solamente se evaluará
+    # cuando exista sensor.
+
+    if temp > 39.2:
+
+        return {
+            "salud_mascota":
+                "Fiebre Detectada",
+
+            "badge_class":
+                "bg-warning text-dark",
+
+            "mensaje":
+                "Temperatura corporal elevada."
+        }
+
+
+    return {
+        "salud_mascota":
+            "Estado Normal",
+
+        "badge_class":
+            "bg-success",
+
+        "mensaje":
+            "Constantes disponibles dentro de rangos normales."
+    }
 
 
 # ==========================================================
@@ -227,23 +237,20 @@ def inicio():
 # LOGIN
 # ==========================================================
 
-@app.route("/login", methods=["GET", "POST"])
+@app.route(
+    "/login",
+    methods=["GET", "POST"]
+)
 def login():
-
-    # ------------------------------------------------------
-    # SI TODAVÍA NO EXISTEN CREDENCIALES
-    # ------------------------------------------------------
 
     if not DATOS_USUARIO["usuario"]:
 
         return redirect(
-            url_for("cambiar_credenciales")
+            url_for(
+                "cambiar_credenciales"
+            )
         )
 
-
-    # ------------------------------------------------------
-    # PROCESAR LOGIN
-    # ------------------------------------------------------
 
     if request.method == "POST":
 
@@ -257,23 +264,23 @@ def login():
             ""
         ).strip()
 
-        # --------------------------------------------------
-        # VALIDAR USUARIO Y CONTRASEÑA
-        # --------------------------------------------------
 
         if (
-            usuario_ingresado == DATOS_USUARIO["usuario"]
+            usuario_ingresado
+            == DATOS_USUARIO["usuario"]
             and
-            clave_ingresada == DATOS_USUARIO["clave"]
+            clave_ingresada
+            == DATOS_USUARIO["clave"]
         ):
 
-            session["usuario_autenticado"] = True
+            session[
+                "usuario_autenticado"
+            ] = True
 
-            session["usuario"] = usuario_ingresado
+            session[
+                "usuario"
+            ] = usuario_ingresado
 
-            # ------------------------------------------------
-            # COMPROBAR LOS 30 DÍAS
-            # ------------------------------------------------
 
             if requiere_cambio_clave():
 
@@ -284,16 +291,18 @@ def login():
                 )
 
                 return redirect(
-                    url_for("cambiar_credenciales")
+                    url_for(
+                        "cambiar_credenciales"
+                    )
                 )
 
-            # ------------------------------------------------
-            # ACCESO NORMAL
-            # ------------------------------------------------
 
             return redirect(
-                url_for("panel_dueno")
+                url_for(
+                    "panel_dueno"
+                )
             )
+
 
         else:
 
@@ -302,13 +311,14 @@ def login():
                 "danger"
             )
 
+
     return render_template(
         "login.html"
     )
 
 
 # ==========================================================
-# CAMBIAR / CREAR CREDENCIALES
+# CAMBIAR CREDENCIALES
 # ==========================================================
 
 @app.route(
@@ -329,9 +339,6 @@ def cambiar_credenciales():
             ""
         ).strip()
 
-        # --------------------------------------------------
-        # VALIDACIÓN
-        # --------------------------------------------------
 
         if not nuevo_usuario:
 
@@ -344,6 +351,7 @@ def cambiar_credenciales():
                 "cambiar_credenciales.html"
             )
 
+
         if not nueva_clave:
 
             flash(
@@ -355,34 +363,41 @@ def cambiar_credenciales():
                 "cambiar_credenciales.html"
             )
 
-        # --------------------------------------------------
-        # GUARDAR CREDENCIALES
-        # --------------------------------------------------
 
-        DATOS_USUARIO["usuario"] = nuevo_usuario
+        DATOS_USUARIO[
+            "usuario"
+        ] = nuevo_usuario
 
-        DATOS_USUARIO["clave"] = nueva_clave
+        DATOS_USUARIO[
+            "clave"
+        ] = nueva_clave
 
-        DATOS_USUARIO["fecha_cambio"] = (
-            obtener_hora_ecuador()
-        )
+        DATOS_USUARIO[
+            "fecha_cambio"
+        ] = obtener_hora_ecuador()
 
-        # --------------------------------------------------
-        # ACTIVAR SESIÓN
-        # --------------------------------------------------
 
-        session["usuario_autenticado"] = True
+        session[
+            "usuario_autenticado"
+        ] = True
 
-        session["usuario"] = nuevo_usuario
+        session[
+            "usuario"
+        ] = nuevo_usuario
+
 
         flash(
             "Credenciales guardadas correctamente.",
             "success"
         )
 
+
         return redirect(
-            url_for("panel_dueno")
+            url_for(
+                "panel_dueno"
+            )
         )
+
 
     return render_template(
         "cambiar_credenciales.html"
@@ -403,7 +418,7 @@ def panel_dueno():
 
 
 # ==========================================================
-# PANEL DEL MÉDICO
+# PANEL MÉDICO
 # ==========================================================
 
 @app.route("/medico")
@@ -433,60 +448,81 @@ def actualizar_telemetria():
             silent=True
         )
 
+
         if not data:
 
             return jsonify({
                 "status": "error",
-                "mensaje": "JSON vacío o inválido"
+                "mensaje":
+                    "JSON vacío o inválido"
             }), 400
 
 
+        # ==================================================
         # TEMPERATURA
+        # ==================================================
+
+        # Por ahora siempre se recibe 0.0
+        # hasta instalar el sensor.
 
         if "temperatura" in data:
 
-            estado_telemetria_actual["temperatura"] = float(
+            estado_telemetria_actual[
+                "temperatura"
+            ] = float(
                 data["temperatura"]
             )
 
 
+        # ==================================================
         # RITMO CARDÍACO
+        # ==================================================
 
         if "ritmo_cardiaco" in data:
 
-            estado_telemetria_actual["ritmo_cardiaco"] = int(
-                float(data["ritmo_cardiaco"])
+            estado_telemetria_actual[
+                "ritmo_cardiaco"
+            ] = int(
+                float(
+                    data["ritmo_cardiaco"]
+                )
             )
 
 
-        # ACELERÓMETRO X
+        # ==================================================
+        # ACELERÓMETRO
+        # ==================================================
 
         if "acx" in data:
 
-            estado_telemetria_actual["acx"] = float(
+            estado_telemetria_actual[
+                "acx"
+            ] = float(
                 data["acx"]
             )
 
 
-        # ACELERÓMETRO Y
-
         if "acy" in data:
 
-            estado_telemetria_actual["acy"] = float(
+            estado_telemetria_actual[
+                "acy"
+            ] = float(
                 data["acy"]
             )
 
 
-        # ACELERÓMETRO Z
-
         if "acz" in data:
 
-            estado_telemetria_actual["acz"] = float(
+            estado_telemetria_actual[
+                "acz"
+            ] = float(
                 data["acz"]
             )
 
 
+        # ==================================================
         # ACTIVIDAD
+        # ==================================================
 
         actividad = str(
             data.get(
@@ -513,7 +549,9 @@ def actualizar_telemetria():
             icono = "⚪"
 
 
-        estado_telemetria_actual["actividad"] = {
+        estado_telemetria_actual[
+            "actividad"
+        ] = {
 
             "estado": actividad,
 
@@ -522,24 +560,9 @@ def actualizar_telemetria():
         }
 
 
-        # PECHERA
-
-        if "pechera_puesta" in data:
-
-            estado_telemetria_actual[
-                "pechera_puesta"
-            ] = bool(
-                data["pechera_puesta"]
-            )
-
-        else:
-
-            estado_telemetria_actual[
-                "pechera_puesta"
-            ] = True
-
-
+        # ==================================================
         # CONEXIÓN
+        # ==================================================
 
         estado_telemetria_actual[
             "conectado"
@@ -553,21 +576,28 @@ def actualizar_telemetria():
         )
 
 
+        # ==================================================
         # CONSOLA
+        # ==================================================
 
-        print("\n================================")
+        print()
+        print("================================")
         print("       TELEMETRÍA RECIBIDA")
         print("================================")
 
         print(
             "Temperatura:",
-            estado_telemetria_actual["temperatura"],
+            estado_telemetria_actual[
+                "temperatura"
+            ],
             "°C"
         )
 
         print(
             "Ritmo cardíaco:",
-            estado_telemetria_actual["ritmo_cardiaco"],
+            estado_telemetria_actual[
+                "ritmo_cardiaco"
+            ],
             "BPM"
         )
 
@@ -578,54 +608,81 @@ def actualizar_telemetria():
 
         print(
             "ACX:",
-            estado_telemetria_actual["acx"]
+            estado_telemetria_actual[
+                "acx"
+            ]
         )
 
         print(
             "ACY:",
-            estado_telemetria_actual["acy"]
+            estado_telemetria_actual[
+                "acy"
+            ]
         )
 
         print(
             "ACZ:",
-            estado_telemetria_actual["acz"]
+            estado_telemetria_actual[
+                "acz"
+            ]
         )
 
         print(
-            "Pechera:",
-            estado_telemetria_actual["pechera_puesta"]
+            "Hora:",
+            estado_telemetria_actual[
+                "ultima_actualizacion"
+            ]
         )
 
-        print("================================\n")
+        print("================================")
+        print()
 
+
+        # ==================================================
+        # RESPUESTA AL ESP32
+        # ==================================================
 
         return jsonify({
 
-            "status": "success",
+            "status":
+                "success",
 
             "mensaje":
                 "Telemetría recibida correctamente",
 
             "temperatura":
-                estado_telemetria_actual["temperatura"],
+                estado_telemetria_actual[
+                    "temperatura"
+                ],
 
             "ritmo_cardiaco":
-                estado_telemetria_actual["ritmo_cardiaco"],
+                estado_telemetria_actual[
+                    "ritmo_cardiaco"
+                ],
 
             "actividad":
-                estado_telemetria_actual["actividad"]
+                estado_telemetria_actual[
+                    "actividad"
+                ]
 
         }), 200
 
 
     except (ValueError, TypeError) as e:
 
+        print(
+            "ERROR EN LOS DATOS:",
+            str(e)
+        )
+
         return jsonify({
 
-            "status": "error",
+            "status":
+                "error",
 
             "mensaje":
-                "Los datos enviados tienen un formato incorrecto.",
+                "Los datos enviados tienen "
+                "un formato incorrecto.",
 
             "detalle":
                 str(e)
@@ -642,7 +699,8 @@ def actualizar_telemetria():
 
         return jsonify({
 
-            "status": "error",
+            "status":
+                "error",
 
             "mensaje":
                 "Error interno del servidor.",
@@ -677,14 +735,12 @@ def api_telemetria():
     actividad = estado_telemetria_actual.get(
         "actividad",
         {
-            "estado": "En espera de sensor",
-            "icono": "⏳"
-        }
-    )
+            "estado":
+                "En espera de sensor",
 
-    pechera = estado_telemetria_actual.get(
-        "pechera_puesta",
-        False
+            "icono":
+                "⏳"
+        }
     )
 
     conectado = estado_telemetria_actual.get(
@@ -692,15 +748,17 @@ def api_telemetria():
         False
     )
 
-    ultima_actualizacion = estado_telemetria_actual.get(
-        "ultima_actualizacion",
-        "---"
+    ultima_actualizacion = (
+        estado_telemetria_actual.get(
+            "ultima_actualizacion",
+            "---"
+        )
     )
 
 
     diagnostico = evaluar_estado_clinico(
         temperatura,
-        ritmo_cardiaco,
+        ritmo_cardiaco
     )
 
 
@@ -711,9 +769,6 @@ def api_telemetria():
 
         "ritmo_cardiaco":
             ritmo_cardiaco,
-
-        "pechera_puesta":
-            pechera,
 
         "actividad":
             actividad,
@@ -769,15 +824,24 @@ def guardar_dosis():
 
 
         peso = float(
-            data.get("peso", 0)
+            data.get(
+                "peso",
+                0
+            )
         )
 
         dosis_mg_kg = float(
-            data.get("dosis_mg_kg", 0)
+            data.get(
+                "dosis_mg_kg",
+                0
+            )
         )
 
         concentracion = float(
-            data.get("concentracion", 0)
+            data.get(
+                "concentracion",
+                0
+            )
         )
 
 
@@ -785,7 +849,8 @@ def guardar_dosis():
 
             return jsonify({
                 "status": "error",
-                "mensaje": "El peso debe ser mayor que 0."
+                "mensaje":
+                    "El peso debe ser mayor que 0."
             }), 400
 
 
@@ -793,7 +858,8 @@ def guardar_dosis():
 
             return jsonify({
                 "status": "error",
-                "mensaje": "La dosis debe ser mayor que 0."
+                "mensaje":
+                    "La dosis debe ser mayor que 0."
             }), 400
 
 
@@ -801,12 +867,16 @@ def guardar_dosis():
 
             return jsonify({
                 "status": "error",
-                "mensaje": "La concentración debe ser mayor que 0."
+                "mensaje":
+                    "La concentración debe ser mayor que 0."
             }), 400
 
 
         volumen_ml = round(
-            (peso * dosis_mg_kg) / concentracion,
+            (
+                peso *
+                dosis_mg_kg
+            ) / concentracion,
             2
         )
 
@@ -886,7 +956,8 @@ def guardar_dosis():
 
         return jsonify({
 
-            "status": "success",
+            "status":
+                "success",
 
             "mensaje":
                 "Dosis guardada correctamente.",
@@ -904,7 +975,8 @@ def guardar_dosis():
 
         return jsonify({
 
-            "status": "error",
+            "status":
+                "error",
 
             "mensaje":
                 "Los datos de la dosis no son válidos.",
@@ -940,7 +1012,9 @@ def obtener_historial_dosis():
     methods=["DELETE"]
 )
 @login_required
-def eliminar_dosis(id_dosis):
+def eliminar_dosis(
+    id_dosis
+):
 
     global HISTORIAL_DOSIS
 
@@ -964,7 +1038,8 @@ def eliminar_dosis(id_dosis):
 
         return jsonify({
 
-            "status": "success",
+            "status":
+                "success",
 
             "mensaje":
                 "Registro eliminado correctamente.",
@@ -977,7 +1052,8 @@ def eliminar_dosis(id_dosis):
 
     return jsonify({
 
-        "status": "error",
+        "status":
+            "error",
 
         "mensaje":
             "No se encontró el registro."
@@ -1018,9 +1094,15 @@ def serve_manifest():
 
 if __name__ == "__main__":
 
-    app.run(
-        debug=True,
-        host="0.0.0.0",
-        port=5000
+    port = int(
+        os.environ.get(
+            "PORT",
+            5000
+        )
     )
 
+    app.run(
+        debug=False,
+        host="0.0.0.0",
+        port=port
+    )

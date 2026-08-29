@@ -178,19 +178,28 @@ def inicio():
 # LOGIN
 # ==========================================================
 
-@app.route("/login", methods=["GET", "POST"])
+@app.route('/login', methods=['GET', 'POST'])
 def login():
+    if not DATOS_USUARIO["usuario"]:
+        return redirect(url_for('cambiar_credenciales'))
 
-    if request.method == "POST":
+    if request.method == 'POST':
+        usuario_ingresado = request.form.get('usuario', '').strip()
+        clave_ingresada = request.form.get('clave', '').strip()
 
-        # --------------------------------------------------
-        # AUTENTICACIÓN SIMPLE
-        # --------------------------------------------------
+        if usuario_ingresado == DATOS_USUARIO["usuario"] and clave_ingresada == DATOS_USUARIO["clave"]:
+            session['usuario_autenticado'] = True
+            session['usuario'] = usuario_ingresado
+            
+            if requiere_cambio_clave():
+                flash("Han transcurrido 30 días. Por seguridad actualice sus datos.", "warning")
+                return redirect(url_for('cambiar_credenciales'))
+                
+            return redirect(url_for('panel_medico'))
+        else:
+            flash("Credenciales incorrectas.", "danger")
 
-        session["usuario_autenticado"] = True
-
-
-    return render_template("login.html")
+    return render_template('login.html')
 
 
 # ==========================================================

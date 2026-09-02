@@ -477,7 +477,7 @@ def panel_medico():
     "/api/actualizar_telemetria",
     methods=["POST"]
 )
-```python
+
 @app.route(
     "/api/actualizar_telemetria",
     methods=["POST"]
@@ -800,7 +800,7 @@ def actualizar_telemetria():
                 str(e)
 
         }), 500
-```
+
 
 
 

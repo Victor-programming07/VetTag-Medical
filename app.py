@@ -477,6 +477,11 @@ def panel_medico():
     "/api/actualizar_telemetria",
     methods=["POST"]
 )
+```python
+@app.route(
+    "/api/actualizar_telemetria",
+    methods=["POST"]
+)
 def actualizar_telemetria():
 
     global estado_telemetria_actual
@@ -487,116 +492,171 @@ def actualizar_telemetria():
             silent=True
         )
 
-
         if not data:
 
             return jsonify({
                 "status": "error",
-                "mensaje":
-                    "JSON vacío o inválido"
+                "mensaje": "JSON vacío o inválido"
             }), 400
 
 
         # ==================================================
-        # TEMPERATURA
+        # TEMPERATURA - SENSOR INDEPENDIENTE
         # ==================================================
 
-        # Por ahora siempre se recibe 0.0
-        # hasta instalar el sensor.
+        if "temperatura" in data:
 
-        if "temperatura" in data and data["temperatura"] is not None:
+            try:
 
-            estado_telemetria_actual[
-                "temperatura"
-            ] = float(
-                data["temperatura"]
-            )
+                valor = data.get("temperatura")
 
+                if valor is not None:
 
-        # ==================================================
-        # RITMO CARDÍACO
-        # ==================================================
+                    estado_telemetria_actual[
+                        "temperatura"
+                    ] = float(valor)
 
-        if "ritmo_cardiaco" in data and data["ritmo_cardiaco"] is not None:
+            except (ValueError, TypeError):
 
-            estado_telemetria_actual[
-                "ritmo_cardiaco"
-            ] = int(
-                float(
-                    data["ritmo_cardiaco"]
+                print(
+                    "ADVERTENCIA: temperatura inválida. "
+                    "Se conserva el último valor."
                 )
-            )
 
 
         # ==================================================
-        # ACELERÓMETRO
+        # RITMO CARDÍACO - SENSOR INDEPENDIENTE
         # ==================================================
 
-        if "acx" in data and data["acx"] is not None:
+        if "ritmo_cardiaco" in data:
 
-            estado_telemetria_actual[
-                "acx"
-            ] = float(
-                data["acx"]
-            )
+            try:
+
+                valor = data.get("ritmo_cardiaco")
+
+                if valor is not None:
+
+                    estado_telemetria_actual[
+                        "ritmo_cardiaco"
+                    ] = int(float(valor))
+
+            except (ValueError, TypeError):
+
+                print(
+                    "ADVERTENCIA: ritmo cardíaco inválido. "
+                    "Se conserva el último valor."
+                )
 
 
-        if "acy" in data and data["acy"] is not None:
+        # ==================================================
+        # ACELERÓMETRO X - INDEPENDIENTE
+        # ==================================================
 
-            estado_telemetria_actual[
-                "acy"
-            ] = float(
-                data["acy"]
-            )
+        if "acx" in data:
+
+            try:
+
+                valor = data.get("acx")
+
+                if valor is not None:
+
+                    estado_telemetria_actual[
+                        "acx"
+                    ] = float(valor)
+
+            except (ValueError, TypeError):
+
+                print(
+                    "ADVERTENCIA: ACX inválido. "
+                    "Se conserva el último valor."
+                )
 
 
-        if "acz" in data and data["acz"] is not None:
+        # ==================================================
+        # ACELERÓMETRO Y - INDEPENDIENTE
+        # ==================================================
 
-            estado_telemetria_actual[
-                "acz"
-            ] = float(
-                data["acz"]
-            )
+        if "acy" in data:
+
+            try:
+
+                valor = data.get("acy")
+
+                if valor is not None:
+
+                    estado_telemetria_actual[
+                        "acy"
+                    ] = float(valor)
+
+            except (ValueError, TypeError):
+
+                print(
+                    "ADVERTENCIA: ACY inválido. "
+                    "Se conserva el último valor."
+                )
+
+
+        # ==================================================
+        # ACELERÓMETRO Z - INDEPENDIENTE
+        # ==================================================
+
+        if "acz" in data:
+
+            try:
+
+                valor = data.get("acz")
+
+                if valor is not None:
+
+                    estado_telemetria_actual[
+                        "acz"
+                    ] = float(valor)
+
+            except (ValueError, TypeError):
+
+                print(
+                    "ADVERTENCIA: ACZ inválido. "
+                    "Se conserva el último valor."
+                )
 
 
         # ==================================================
         # ACTIVIDAD
         # ==================================================
 
-        actividad = str(
-            data.get(
-                "actividad",
-                "En Reposo"
+        if "actividad" in data:
+
+            actividad = str(
+                data.get("actividad")
             )
-        )
 
 
-        if actividad == "En Reposo":
+            if actividad == "En Reposo":
 
-            icono = "🟢"
+                icono = "🟢"
 
-        elif actividad == "En Movimiento":
+            elif actividad == "En Movimiento":
 
-            icono = "🟡"
+                icono = "🟡"
 
-        elif actividad == "Movimiento Intenso":
+            elif actividad == "Movimiento Intenso":
 
-            icono = "🔴"
+                icono = "🔴"
 
-        else:
+            else:
 
-            icono = "⚪"
+                icono = "⚪"
 
 
-        estado_telemetria_actual[
-            "actividad"
-        ] = {
+            estado_telemetria_actual[
+                "actividad"
+            ] = {
 
-            "estado": actividad,
+                "estado": actividad,
 
-            "icono": icono
+                "icono": icono
 
-        }
+            }
 
 
         # ==================================================
@@ -620,9 +680,18 @@ def actualizar_telemetria():
         # ==================================================
 
         print()
-        print("================================")
-        print("       TELEMETRÍA RECIBIDA")
-        print("================================")
+
+        print(
+            "================================"
+        )
+
+        print(
+            "       TELEMETRÍA RECIBIDA"
+        )
+
+        print(
+            "================================"
+        )
 
         print(
             "Temperatura:",
@@ -642,7 +711,9 @@ def actualizar_telemetria():
 
         print(
             "Actividad:",
-            actividad
+            estado_telemetria_actual[
+                "actividad"
+            ]["estado"]
         )
 
         print(
@@ -673,12 +744,15 @@ def actualizar_telemetria():
             ]
         )
 
-        print("================================")
+        print(
+            "================================"
+        )
+
         print()
 
 
         # ==================================================
-        # RESPUESTA AL ESP32
+        # RESPUESTA ESP32
         # ==================================================
 
         return jsonify({
@@ -707,28 +781,6 @@ def actualizar_telemetria():
         }), 200
 
 
-    except (ValueError, TypeError) as e:
-
-        print(
-            "ERROR EN LOS DATOS:",
-            str(e)
-        )
-
-        return jsonify({
-
-            "status":
-                "error",
-
-            "mensaje":
-                "Los datos enviados tienen "
-                "un formato incorrecto.",
-
-            "detalle":
-                str(e)
-
-        }), 400
-
-
     except Exception as e:
 
         print(
@@ -748,6 +800,8 @@ def actualizar_telemetria():
                 str(e)
 
         }), 500
+```
+
 
 
 # ==========================================================

@@ -473,10 +473,6 @@ def panel_medico():
 # RECIBIR TELEMETRÍA DEL ESP32
 # ==========================================================
 
-@app.route(
-    "/api/actualizar_telemetria",
-    methods=["POST"]
-)
 
 @app.route(
     "/api/actualizar_telemetria",

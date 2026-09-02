@@ -1,5 +1,3 @@
-
-
 import os
 import datetime
 
@@ -506,7 +504,7 @@ def actualizar_telemetria():
         # Por ahora siempre se recibe 0.0
         # hasta instalar el sensor.
 
-        if "temperatura" in data:
+        if "temperatura" in data and data["temperatura"] is not None:
 
             estado_telemetria_actual[
                 "temperatura"
@@ -519,7 +517,7 @@ def actualizar_telemetria():
         # RITMO CARDÍACO
         # ==================================================
 
-        if "ritmo_cardiaco" in data:
+        if "ritmo_cardiaco" in data and data["ritmo_cardiaco"] is not None:
 
             estado_telemetria_actual[
                 "ritmo_cardiaco"
@@ -534,7 +532,7 @@ def actualizar_telemetria():
         # ACELERÓMETRO
         # ==================================================
 
-        if "acx" in data:
+        if "acx" in data and data["acx"] is not None:
 
             estado_telemetria_actual[
                 "acx"
@@ -543,7 +541,7 @@ def actualizar_telemetria():
             )
 
 
-        if "acy" in data:
+        if "acy" in data and data["acy"] is not None:
 
             estado_telemetria_actual[
                 "acy"
@@ -552,7 +550,7 @@ def actualizar_telemetria():
             )
 
 
-        if "acz" in data:
+        if "acz" in data and data["acz"] is not None:
 
             estado_telemetria_actual[
                 "acz"
@@ -1149,4 +1147,3 @@ if __name__ == "__main__":
         host="0.0.0.0",
         port=port
     )
-
